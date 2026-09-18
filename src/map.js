@@ -1,7 +1,9 @@
 /* 海图场景：PixiJS 渲染的平铺海面、像素陆地、港口、船精灵、实时航行、昼夜 */
 import { Application, Container, Sprite, TilingSprite, Graphics, Text, Rectangle } from 'pixi.js';
 import { PORTS, ZONES, LAND, FACTION_COLOR } from './data.js';
-import { S, hooks, port, zone, zoneLeader, fleetSpeed, dayDistance, passDays, log } from './game.js';
+import { S, hooks, port, zone, zoneLeader, fleetSpeed, dayDistance, passDays, log, weatherTick, weatherSpeed, WEATHER_ICON } from './game.js';
+import { WeatherLayer } from './weather.js';
+import { audio } from './audio.js';
 import { makeWaterFrames, makeShipTextures, makePortIcon, makeLandCanvas, canvasTexture } from './pixelart.js';
 import { PortScene } from './port.js';
 import { BattleScene } from './battle.js';
@@ -67,6 +69,7 @@ export class WorldMap {
     // 港口场景
     this.port = new PortScene(this.app, this.shipTex); this.app.stage.addChild(this.port.root);
     this.battle = new BattleScene(this.app, this.shipTex, this.waterFrames); this.app.stage.addChild(this.battle.root);
+    this.weather = new WeatherLayer(this.app); this.app.stage.addChild(this.weather.root);
 
     // 拖动镜头
     const st = this.app.stage; st.eventMode = 'static'; st.hitArea = this.app.screen;
@@ -91,6 +94,7 @@ export class WorldMap {
     this.battle.root.visible = m === 'battle';
     if (m === 'port') this.port.show(S.pos);
     if (m === 'sea') { this.follow = true; this.snapCamera(); }
+    audio.playBgm(m === 'battle' ? 'battle' : m === 'port' ? 'port' : 'sea');
   }
 
   /* ----- 港口标记：主导势力光环 / 已到访 / 当前停泊 ----- */
@@ -113,13 +117,13 @@ export class WorldMap {
   }
   move(dt) {
     const to = port(S.dest); const dx = to.x - S.ship.x, dy = to.y - S.ship.y; const dist = Math.hypot(dx, dy);
-    const fs = fleetSpeed(); const speed = 40 * (fs / 6) * this.speedMul;   // 逻辑单位 / 秒
+    const fs = fleetSpeed(); const speed = 40 * (fs / 6) * this.speedMul * weatherSpeed();   // 逻辑单位 / 秒
     const step = Math.min(dist, speed * dt);
     if (dist > 0.01) { S.ship.x += dx / dist * step; S.ship.y += dy / dist * step; this.heading = Math.atan2(dy, dx); this.updateDir(); }
     const v = S.voyage; if (v) v.traveled += step;
     S.dayAcc += step / dayDistance();
     let dayPassed = false;
-    while (S.dayAcc >= 1) { S.dayAcc -= 1; passDays(1); if (v) v.days++; dayPassed = true; }
+    while (S.dayAcc >= 1) { S.dayAcc -= 1; passDays(1); weatherTick(); if (v) v.days++; dayPassed = true; }
     if (dayPassed) hooks.renderTop();
     this.wakeT += dt; if (this.wakeT > 0.1 && step > 0) { this.wakeT = 0; this.spawnWake(); }
     if (v && !v.eventFired && v.traveled >= v.total * 0.5) {
@@ -152,13 +156,17 @@ export class WorldMap {
     const dt = t.deltaMS / 1000;
     this.frameT += t.deltaMS;
     if (this.frameT > 350) { this.frameT = 0; this.frame = (this.frame + 1) % this.waterFrames.length; this.water.texture = this.waterFrames[this.frame]; this.water2.texture = this.waterFrames[(this.frame + 2) % 4]; }
-    this.water.tilePosition.x += dt * 5; this.water.tilePosition.y += dt * 1.5;
-    this.water2.tilePosition.x -= dt * 3; this.water2.tilePosition.y += dt * 2.5;
+    const ws = S && S.weather?.type === 'storm' ? 3 : S && S.weather?.type === 'rain' ? 1.6 : 1;
+    this.water.tilePosition.x += dt * 5 * ws; this.water.tilePosition.y += dt * 1.5 * ws;
+    this.water2.tilePosition.x -= dt * 3 * ws; this.water2.tilePosition.y += dt * 2.5 * ws;
     for (const w of this.wakes) { w.life -= dt; w.g.alpha = Math.max(0, w.life / 1.4) * 0.6; w.g.scale.set(1 + (1.4 - w.life) * 0.5); }
     this.wakes = this.wakes.filter(w => { if (w.life <= 0) { w.g.destroy(); return false; } return true; });
     if (!S) return;
     const modalOpen = !!document.querySelector('.modal-bg');
+    const wt = this.mode === 'battle' ? 'clear' : (S.weather?.type || 'clear');
+    this.weather.tick(dt, wt);
     if (this.mode === 'battle') { this.battle.tick(dt); return; }
+    const [sx, sy] = this.weather.shakeOffset(); this.app.stage.position.set(Math.round(sx), Math.round(sy));
     if (this.mode === 'port') { if (!modalOpen) this.port.tick(dt); return; }
     if (!modalOpen && S.dest) this.move(dt);
     this.placeShip();
@@ -179,7 +187,7 @@ export class WorldMap {
     const el = document.getElementById('sailbanner'); if (!el) return;
     if (!S.dest) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
     const v = S.voyage; const hour = Math.floor(S.dayAcc * 24);
-    const txt = `⛵ 航行中 → ${port(S.dest).name} · 第 ${v.days + 1} 天 · ${String(hour).padStart(2, '0')}:00 · 补给 ${S.supplies}`;
+    const txt = `⛵ 航行中 → ${port(S.dest).name} · 第 ${v.days + 1} 天 · ${String(hour).padStart(2, '0')}:00 · ${WEATHER_ICON[S.weather?.type || 'clear']} · 补给 ${S.supplies}`;
     if (el.textContent !== txt) el.textContent = txt; if (el.style.display !== 'block') el.style.display = 'block';
   }
 

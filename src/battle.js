@@ -3,6 +3,7 @@ import { Container, Sprite, TilingSprite, Graphics, Text } from 'pixi.js';
 import { S, B, hooks, T, fleeChance, blog, endBattle, alive, fireAt, boardAt, rival } from './game.js';
 import { SHIP_TYPES, CHARS, RIVAL_REP } from './data.js';
 import { clamp, pick, rand } from './util.js';
+import { audio } from './audio.js';
 
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
 export const COLS = 12, ROWS = 8, RANGE = 3;
@@ -152,8 +153,8 @@ export class BattleScene {
   }
   checkEnd() {
     if (B.over) return true;
-    if (!alive(B.enemy).length) { endBattle('win'); this.refresh(); return true; }
-    if (!alive(S.fleet).length) { endBattle('lose'); this.refresh(); return true; }
+    if (!alive(B.enemy).length) { endBattle('win'); audio.sfx('win'); this.refresh(); return true; }
+    if (!alive(S.fleet).length) { endBattle('lose'); audio.sfx('lose'); this.refresh(); return true; }
     return false;
   }
 
@@ -196,17 +197,17 @@ export class BattleScene {
   }
   async doFire(a, t, mine, d) {
     const A = this.center(a), Tt = this.center(t);
-    this.muzzle(A.x + (Tt.x > A.x ? 1 : -1) * this.R * 0.55, A.y - 2);
+    this.muzzle(A.x + (Tt.x > A.x ? 1 : -1) * this.R * 0.55, A.y - 2); audio.sfx('cannon');
     await this.cannonball(A, Tt);
     const r = fireAt(a.ref, t.ref, mine, d);
-    this.impact(Tt.x, Tt.y); this.hitFlash(t); this.shake(mine ? 3 : 5); this.floatDmg(Tt.x, Tt.y - this.R * 0.6, `-${r.dmg}`, mine ? '#ffe08a' : '#ff8a8a');
+    this.impact(Tt.x, Tt.y); audio.sfx('hit'); this.hitFlash(t); this.shake(mine ? 3 : 5); this.floatDmg(Tt.x, Tt.y - this.R * 0.6, `-${r.dmg}`, mine ? '#ffe08a' : '#ff8a8a');
     this.updateHp(t); hooks.renderBattle();
     if (r.sunk) await this.sink(t); else await this.wait(220);
   }
   async doBoard(a, t, mine, mult) {
     const A = this.center(a), Tt = this.center(t); const dx = (Tt.x - A.x) * 0.45, dy = (Tt.y - A.y) * 0.45;
     await this.tween(220, k => u_set(a.view.c, A.x + dx * k, A.y + dy * k));
-    this.slash(Tt.x, Tt.y); this.shake(3);
+    this.slash(Tt.x, Tt.y); this.shake(3); audio.sfx('board');
     const r = boardAt(a.ref, t.ref, mine, mult);
     this.floatDmg(Tt.x, Tt.y - this.R * 0.6, `船员 -${r.loss}`, mine ? '#ffe08a' : '#ff8a8a'); hooks.renderBattle();
     await this.tween(220, k => u_set(a.view.c, A.x + dx * (1 - k), A.y + dy * (1 - k)));
@@ -235,7 +236,7 @@ export class BattleScene {
   floatDmg(x, y, text, color) { const t = new Text({ text, style: { fontFamily: '"Press Start 2P",monospace', fontSize: 11, fill: color, stroke: { color: '#06101a', width: 3 } } }); t.anchor.set(0.5, 1); t.position.set(x, y); this.addP(t, { life: 0.9, max: 0.9, vx: 0, vy: -40, grow: 0 }); }
   spawnWake(x, y) { const g = new Graphics().rect(-2, -2, 4, 4).fill(0xdff3ff); g.position.set(x + (Math.random() - 0.5) * 10, y); this.addP(g, { life: 0.6, max: 0.6, vx: 0, vy: 0, grow: 0.8 }); }
   async sink(u, captured = false) {
-    const c = u.view.c, spr = u.view.spr; spr.tint = captured ? 0xffffff : 0x8899aa; const y0 = c.y;
+    const c = u.view.c, spr = u.view.spr; spr.tint = captured ? 0xffffff : 0x8899aa; const y0 = c.y; audio.sfx('sink');
     if (captured) { u.view.name.style.fill = '#f2c14e'; }
     const bubbles = setInterval(() => { const g = new Graphics().circle(0, 0, 2 + Math.random() * 2).stroke({ width: 1, color: 0xcfe8f5 }); g.position.set(c.x + (Math.random() - 0.5) * this.R, c.y + this.R * 0.3); this.addP(g, { life: 0.9, max: 0.9, vx: 0, vy: -30, grow: 0.5 }); }, 90);
     await this.tween(1100, k => { c.y = y0 + k * this.R * 0.7; c.alpha = 1 - k; spr.rotation = k * 0.25; });

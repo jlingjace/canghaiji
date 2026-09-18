@@ -33,7 +33,7 @@ export function nextShipName() {
 
 export function newGame() {
   S = {
-    gold: 3000, day: 0, pos: 'baifan', ship: { x: 120, y: 130 }, dest: null, voyage: null, dayAcc: 0.3,
+    gold: 3000, day: 0, pos: 'baifan', ship: { x: 120, y: 130 }, dest: null, voyage: null, dayAcc: 0.3, weather: { type: 'clear', days: 0 },
     fleet: [], cargo: {}, supplies: 30, drift: {}, stock: {}, share: {}, dev: {}, mem: {}, log: [],
     captain: null, tab: 'port', ptab: 'market', won: false, stats: { trades: 0, battles: 0, wins: 0 },
   };
@@ -115,6 +115,19 @@ export function monthTick() {
   log(`月结：支付船员薪酬 ${fmt(wages)}${income ? `，海域主导收益 +${fmt(income)}` : ''}。`, income ? 'good' : '');
   if (S.gold < -5000) { for (const sh of S.fleet) sh.crew = Math.max(1, Math.floor(sh.crew * 0.8)); log('商会严重负债，大量船员弃船而去！', 'bad'); }
 }
+
+/* ========= 天气 ========= */
+export const WEATHER_ICON = { clear: '☀', rain: '🌧', storm: '⛈' };
+/** 每个航行日结算一次天气 */
+export function weatherTick() {
+  const w = S.weather || (S.weather = { type: 'clear', days: 0 });
+  if (w.type !== 'clear') { w.days--; if (w.days <= 0) { w.type = 'clear'; w.days = 0; log('天色放晴，海面恢复平静。'); } return; }
+  const r = Math.random();
+  if (r < 0.10) { w.type = 'rain'; w.days = randInt(2, 3); log('天空阴沉下来，下起了雨。'); }
+  else if (r < 0.14) { w.type = 'storm'; w.days = randInt(1, 2); log('乌云压顶，风暴来了！船队被迫减速。', 'bad'); }
+}
+export function setWeather(type, days) { S.weather = { type, days }; }
+export const weatherSpeed = () => S.weather?.type === 'storm' ? 0.72 : S.weather?.type === 'rain' ? 0.9 : 1;
 
 /* ========= 航行参数 ========= */
 export function fleetSpeed() {
@@ -305,7 +318,7 @@ export function load(silent) {
   try {
     const raw = localStorage.getItem(SAVE_KEY); if (!raw) { if (!silent) hooks.toast('没有存档'); return false; }
     const d = JSON.parse(raw); if (!d || !d.fleet || !d.share || !d.ship) { if (!silent) hooks.toast('存档损坏'); return false; }
-    S = d; S.stats = S.stats || { trades: 0, battles: 0, wins: 0 }; if (!S.captain) S.captain = 'lin';
+    S = d; S.stats = S.stats || { trades: 0, battles: 0, wins: 0 }; if (!S.captain) S.captain = 'lin'; if (!S.weather) S.weather = { type: 'clear', days: 0 };
     if (!silent) { hooks.toast('已读取存档'); hooks.render(); }
     return true;
   } catch (e) { if (!silent) hooks.toast('读取失败'); return false; }

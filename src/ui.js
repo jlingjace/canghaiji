@@ -6,6 +6,7 @@ import { portrait, bust } from './portraits.js';
 import { hexDist, moveRange, RANGE } from './battle.js';
 import { fmt, clamp, pick, randInt, rand } from './util.js';
 import { runTypewriter, setMenuCursor, floatText, tweenNumber, flash } from './fx.js';
+import { audio } from './audio.js';
 
 let map = null;
 let pending = null;      // 遭遇对手商会时的待决状态
@@ -14,7 +15,7 @@ let eventCb = null;
 /* ========= 基础弹窗 ========= */
 export function showModal(html) {
   document.getElementById('modal').innerHTML = `<div class="modal-bg"><div class="modal">${html}</div></div>`;
-  const m = document.querySelector('.modal'); runTypewriter(m); setMenuCursor(m);
+  const m = document.querySelector('.modal'); runTypewriter(m); setMenuCursor(m); audio.sfx('open');
 }
 export function closeModal() { document.getElementById('modal').innerHTML = ''; }
 let toastT = null;
@@ -66,12 +67,12 @@ function planVoyage(pid) {
     <div class="row"><button class="btn primary" data-a="sail" data-pid="${pid}" ${low.length && !S.dest ? 'disabled' : ''}>${S.dest ? '改变航向' : '出航'}</button><button class="btn" data-a="closeModal">取消</button></div>`);
 }
 function sail(pid) {
-  const to = port(pid); closeModal(); flash(); map.setMode('sea');
+  const to = port(pid); closeModal(); flash(); map.setMode('sea'); audio.sfx('sail');
   g.log(S.dest ? `船队改变航向，前往 ${to.name}。` : `从 ${port(S.pos).name} 启航前往 ${to.name}，预计 ${g.voyageDays(pid)} 天。`);
   map.startVoyage(pid); S.tab = 'port'; render();
 }
 function arrive(pid) {
-  flash(); map.setMode('port'); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
+  flash(); map.setMode('port'); audio.sfx('bell'); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
   S.tab = 'port'; S.ptab = 'market'; g.save(true); render();
 }
 
@@ -83,7 +84,7 @@ function rollEvent(to, done) {
     const sh = pick(S.fleet); const dmg = Math.round(T(sh).hp * rand(0.1, 0.3)); sh.hp -= dmg;
     const extra = randInt(1, 2); let txt = `风暴袭来，${sh.name} 受损 ${dmg} 点，船队被迫绕行，航程延长 ${extra} 天。`;
     if (sh.hp <= 0) { if (S.fleet.length > 1) { S.fleet.splice(S.fleet.indexOf(sh), 1); g.loseCargoFor(sh); txt += ` ${sh.name} 在风暴中沉没！`; } else { sh.hp = 1; txt += ' 船体几近解体，勉强保住。'; } }
-    g.log(txt, 'bad'); showEvent('风暴', txt, () => done(extra)); return;
+    g.setWeather('storm', randInt(1, 2)); audio.sfx('thunder'); g.log(txt, 'bad'); showEvent('风暴', txt, () => done(extra)); return;
   }
   if (r < 0.56) {
     const enemy = g.makeEnemy('pirate');
@@ -155,7 +156,8 @@ let lastGold = null;
 export function resetGoldTween() { lastGold = null; }
 function renderTop() {
   const p = port(S.pos); const cap = captain();
-  const status = S.dest ? `航行中 → <b>${port(S.dest).name}</b>（第 ${S.voyage.days + 1} 天，约剩 ${g.voyageDays(S.dest)} 天）` : `停泊 <b>${p.name}</b>（${zone(p.zone).name}）`;
+  const wi = g.WEATHER_ICON[S.weather?.type || 'clear'];
+  const status = S.dest ? `航行中 → <b>${port(S.dest).name}</b>（第 ${S.voyage.days + 1} 天，约剩 ${g.voyageDays(S.dest)} 天）${wi}` : `停泊 <b>${p.name}</b>（${zone(p.zone).name}）${wi}`;
   document.getElementById('top').innerHTML = `<span class="title">沧海纪</span>
     <span class="cap">${portrait(cap, 28)}<b>${cap.name}</b></span>
     <span class="stat">金币 <b id="goldv" class="${S.gold < 0 ? 'bad' : 'gold'}">${fmt(S.gold)}</b></span>
@@ -165,11 +167,11 @@ function renderTop() {
     <span class="stat">货舱 <b>${g.cargoUsed()}/${g.capacity()}</b></span>
     <span class="stat">补给 <b class="${S.supplies < g.dailySupply() * 5 ? 'warn' : ''}">${S.supplies}</b>（日耗 ${g.dailySupply()}）</span>
     <span class="spacer"></span>
-    <span class="row"><button class="btn" data-a="help">玩法</button><button class="btn" data-a="save">保存</button><button class="btn" data-a="load">读取</button><button class="btn" data-a="newGame">新游戏</button></span>`;
+    <span class="row"><button class="btn" data-a="mute" title="音乐 / 音效">${audio.muted ? '🔇 静音' : '🔊 音效'}</button><button class="btn" data-a="help">玩法</button><button class="btn" data-a="save">保存</button><button class="btn" data-a="load">读取</button><button class="btn" data-a="newGame">新游戏</button></span>`;
   const gv = document.getElementById('goldv');
   if (lastGold !== null && lastGold !== S.gold && gv) {
     tweenNumber(gv, lastGold, S.gold);
-    const d = S.gold - lastGold; floatText(gv, (d > 0 ? '+' : '−') + fmt(Math.abs(d)), d > 0 ? 'good' : 'bad');
+    const d = S.gold - lastGold; floatText(gv, (d > 0 ? '+' : '−') + fmt(Math.abs(d)), d > 0 ? 'good' : 'bad'); audio.sfx(d > 0 ? 'coin' : 'pay');
   }
   lastGold = S.gold;
 }
@@ -308,6 +310,7 @@ export const ACTIONS = {
     showModal(`<div class="npc big"><div class="bust-wrap">${bust(CHARS.hong, 136)}</div><div><h2>酒馆情报</h2><p class="muted" style="font-size:12px;margin-top:-4px">红姨 · 酒馆老板娘</p><p data-tw>“${r.p.name}那边的${r.best.name}，这阵子卖到 ${r.pr} 金币上下，${zone(r.p.zone).name}的商人都在往那儿运。这消息值你那 50 个金币吧？”</p></div></div><div class="row tw-actions"><button class="btn primary" data-a="closeModal">谢了</button></div>`); },
   sailTo: d => planVoyage(d.pid), sail: d => sail(d.pid),
   recenter: () => map.recenter(),
+  mute: () => { audio.init(); audio.toggleMute(); renderTop(); },
   seaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); },
   backPort: () => { map.setMode('port'); renderMapCtl(); },
   speed: () => { map.speedMul = map.speedMul === 1 ? 3 : 1; document.getElementById('speedbtn').textContent = `▶ ${map.speedMul}×`; if (S.tab === 'port' && S.dest) renderPanel(); },
@@ -330,9 +333,11 @@ export function initUI(worldMap) {
     openPortTab: ptab => { S.tab = 'port'; S.ptab = ptab; render(); document.getElementById('panel').scrollTop = 0; },
     openSeaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); } });
   map.onPortTap = pid => planVoyage(pid);
+  const boot = () => { audio.init(); document.removeEventListener('pointerdown', boot); document.removeEventListener('keydown', boot); };
+  document.addEventListener('pointerdown', boot); document.addEventListener('keydown', boot);
   document.addEventListener('click', e => {
     const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
-    const a = b.dataset.a;
+    const a = b.dataset.a; if (b.classList.contains('btn') || b.classList.contains('ccard')) audio.sfx('click');
     if (S.dest && PORT_ACTIONS.has(a)) { toast('航行中，抵港后再操作'); return; }
     if (ACTIONS[a]) ACTIONS[a](b.dataset);
   });

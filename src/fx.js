@@ -1,4 +1,5 @@
 /* 界面特效：打字机对话、光标式菜单、飘字、数字滚动、黑场闪切 */
+import { audio } from './audio.js';
 
 /* ---------- 打字机 ---------- */
 let tw = null;
@@ -15,6 +16,7 @@ export function runTypewriter(root) {
     const e = tw.els[tw.i], f = tw.full[tw.i];
     tw.j++; e.textContent = f.slice(0, tw.j);
     if (tw.bust && tw.j % 3 === 0) tw.bust.classList.toggle('talk');
+    if (tw.j % 2 === 0) audio.sfx('type');
     let delay = 26;
     if (/[，。！？；：…—]/.test(f[tw.j - 1])) delay = 150;
     if (tw.j >= f.length) {
