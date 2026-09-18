@@ -1,0 +1,932 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>沧海纪</title>
+<meta name="description" content="原创的大航海贸易与海域争霸游戏：经营船队、跨海贸易、投资港口、争夺六大海域的势力份额。">
+<style>
+:root{
+  --bg:#0b1a2a; --panel:#12263a; --panel2:#0f2033; --line:#1f3a55; --text:#e6eef7; --muted:#8fa6bd;
+  --gold:#f2c14e; --accent:#3aa0d8; --good:#5ad48a; --bad:#e8646c; --warn:#f0a35e;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+#app{display:grid;grid-template-rows:auto 1fr;height:100vh}
+header{display:flex;gap:16px;align-items:center;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header .title{font-weight:700;font-size:18px;color:var(--gold);letter-spacing:2px}
+header .stat{color:var(--muted);font-size:13px}
+header .stat b{color:var(--text);font-weight:600}
+header .spacer{flex:1}
+main{display:grid;grid-template-columns:1fr 430px;min-height:0}
+#mapwrap{position:relative;overflow:hidden;background:#0a2438;display:flex;align-items:center;justify-content:center}
+#map{width:100%;height:100%;display:block}
+#side{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;background:none;border:0;color:var(--muted);padding:10px 4px;cursor:pointer;border-bottom:2px solid transparent;font-size:14px}
+.tabs button.active{color:var(--text);border-color:var(--gold)}
+#panel{overflow:auto;padding:12px 14px;flex:1;min-height:0}
+h2{font-size:16px;margin:0 0 6px}
+h3{font-size:14px;margin:14px 0 6px;color:var(--gold)}
+p{margin:6px 0}
+.muted{color:var(--muted)}
+.good{color:var(--good)} .bad{color:var(--bad)} .warn{color:var(--warn)} .gold{color:var(--gold)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:5px 6px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap;vertical-align:middle}
+th{color:var(--muted);font-weight:500}
+td.r,th.r{text-align:right}
+.btn{background:var(--panel2);border:1px solid var(--line);color:var(--text);padding:4px 9px;border-radius:4px;cursor:pointer;font-size:12px;line-height:1.4}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#031421;font-weight:600}
+.btn.danger{border-color:var(--bad);color:var(--bad)}
+.btn:disabled{opacity:.35;cursor:not-allowed}
+.btn.sm{padding:2px 6px;font-size:11px}
+.row{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.row.nowrap{flex-wrap:nowrap}
+.scroll{overflow-x:auto}
+.subtabs{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}
+.subtabs .btn.active{border-color:var(--gold);color:var(--gold)}
+.badge{display:inline-block;font-size:11px;padding:0 6px;border-radius:10px;border:1px solid;line-height:16px}
+.badge.low{color:var(--good);border-color:var(--good)}
+.badge.high{color:var(--bad);border-color:var(--bad)}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:8px 0}
+.bar{height:10px;background:#0a1622;border-radius:5px;overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.hpbar{height:6px;background:#0a1622;border-radius:3px;overflow:hidden;margin:3px 0}
+.hpbar i{display:block;height:100%;background:var(--good)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin-top:4px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:middle}
+.log{font-size:13px}
+.log div{padding:3px 0;border-bottom:1px dashed var(--line)}
+.log .d{color:var(--muted);font-size:11px;margin-right:6px}
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:10;padding:16px}
+.modal{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:20px;width:min(760px,100%);max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.modal h2{color:var(--gold)}
+.battle{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.bship{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:13px}
+.bship.dead{opacity:.4;text-decoration:line-through}
+.blog{max-height:160px;overflow:auto;background:#0a1622;border-radius:6px;padding:8px 10px;margin:10px 0;font-size:13px}
+.blog div{padding:2px 0}
+.zlabel{font-size:15px;font-weight:700;letter-spacing:3px;opacity:.55}
+.plabel{font-size:11px;fill:#dbe7f3;pointer-events:none}
+.port:hover .dot{r:8}
+kbd{background:var(--panel2);border:1px solid var(--line);border-radius:3px;padding:0 4px;font-size:12px}
+.pt{border-radius:50%;flex:none;box-shadow:0 0 0 2px var(--line)}
+.npc{display:flex;gap:12px;align-items:flex-start;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:4px 0 10px}
+.npc .say{font-size:13px;color:#cfdcea;margin-top:2px;font-style:italic}
+.npc.big{border:0;background:none;padding:0;margin:0 0 10px}
+.npc.big h2{margin-top:0}
+.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:12px 0}
+.ccard{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:14px;text-align:center;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px}
+.ccard:hover{border-color:var(--gold);transform:translateY(-2px)}
+.ccard p{font-size:12px;color:var(--muted);margin:0}
+.vs{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.vsx{flex:1;text-align:center;color:var(--bad);font-weight:800;letter-spacing:2px}
+#sailbanner{position:absolute;top:10px;left:12px;background:rgba(11,26,42,.88);border:1px solid var(--line);border-radius:6px;padding:6px 12px;font-size:13px;display:none;z-index:2}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(-2deg)}50%{transform:translateY(-2px) rotate(2deg)}}
+#shipmark .boat{transform-box:fill-box;transform-origin:center;animation:bob 2.6s ease-in-out infinite}
+#map.sailing #shipmark .boat{animation-duration:1.1s}
+@keyframes dash{to{stroke-dashoffset:-24}}
+#routeline{animation:dash 1s linear infinite}
+header .cap{display:flex;align-items:center;gap:6px}
+@media (max-width:900px){
+  .cards{grid-template-columns:1fr}
+  main{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
+  #side{border-left:0;border-top:1px solid var(--line)}
+  .battle{grid-template-columns:1fr}
+  header{padding:8px 12px;gap:10px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="top"></header>
+  <main>
+    <div id="mapwrap"><div id="sailbanner"></div><svg id="map" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg"></svg></div>
+    <aside id="side">
+      <div class="tabs" id="tabs"></div>
+      <div id="panel"></div>
+    </aside>
+  </main>
+</div>
+<div id="modal"></div>
+
+<script>
+'use strict';
+/* ========= 工具 ========= */
+const rand=(a,b)=>a+Math.random()*(b-a);
+const randInt=(a,b)=>Math.floor(rand(a,b+1));
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const fmt=n=>Math.round(n).toLocaleString('zh-CN');
+function hash(s){let h=7;for(const c of s)h=(h*31+c.charCodeAt(0))>>>0;return h;}
+
+/* ========= 静态数据（全部原创设定） ========= */
+const GOODS=[
+  ['grain','谷物',20],['wood','木材',30],['leather','皮革',45],['cotton','棉花',55],['wine','酒',60],['cloth','布匹',70],
+  ['sugar','砂糖',80],['iron','铁器',90],['tea','茶叶',120],['coffee','咖啡',130],['herb','药材',150],['spice','香料',200],
+  ['silk','丝绸',260],['porcelain','瓷器',300],['ivory','象牙',400],['gem','珠宝',600]
+].map(([id,name,base])=>({id,name,base}));
+const G=Object.fromEntries(GOODS.map(g=>[g.id,g]));
+
+const SHIP_TYPES={
+  sloop:{name:'小帆船',cargo:60,hp:100,cannons:6,speed:6,crew:20,price:2000},
+  schooner:{name:'纵帆船',cargo:120,hp:160,cannons:12,speed:7,crew:40,price:6000},
+  merchant:{name:'大商船',cargo:260,hp:220,cannons:16,speed:5,crew:60,price:14000},
+  galleon:{name:'盖伦帆船',cargo:320,hp:320,cannons:30,speed:5,crew:100,price:32000},
+  frigate:{name:'巡防舰',cargo:140,hp:380,cannons:44,speed:8,crew:120,price:45000},
+};
+const YARD_SHIPS={1:['sloop','schooner'],2:['sloop','schooner','merchant'],3:['sloop','schooner','merchant','galleon','frigate']};
+
+const ZONES=[
+  {id:'west',name:'西洋',color:'#6fb1e6',label:[150,60]},
+  {id:'north',name:'北海',color:'#9fd0f0',label:[400,120]},
+  {id:'east',name:'东海',color:'#e69fbd',label:[700,60]},
+  {id:'south',name:'南洋',color:'#8fd9a8',label:[150,320]},
+  {id:'pearl',name:'珍珠海',color:'#d6c2f0',label:[430,290]},
+  {id:'gold',name:'黄金海',color:'#f2c14e',label:[720,310]},
+];
+const RIVALS=[
+  {id:'whale',name:'蓝鲸商会',color:'#4f8fd6',home:'north'},
+  {id:'redsail',name:'红帆同盟',color:'#d65a5a',home:'south'},
+  {id:'goldsand',name:'金沙公司',color:'#d6b04f',home:'gold'},
+];
+const FACTION_COLOR={player:'#f2c14e',whale:'#4f8fd6',redsail:'#d65a5a',goldsand:'#d6b04f'};
+const FACTION_NAME={player:'你的商会',whale:'蓝鲸商会',redsail:'红帆同盟',goldsand:'金沙公司'};
+
+const PORTS=[
+  {id:'baifan',name:'白帆港',zone:'west',x:120,y:130,yard:2,produce:['grain','cloth'],demand:['spice','silk','tea']},
+  {id:'tiemao',name:'铁锚城',zone:'west',x:230,y:200,yard:3,produce:['iron','wood'],demand:['porcelain','sugar','ivory']},
+  {id:'wujiao',name:'雾角',zone:'west',x:95,y:255,yard:1,produce:['wine','leather'],demand:['coffee','gem','spice']},
+  {id:'huiyan',name:'灰岩堡',zone:'north',x:370,y:70,yard:3,produce:['wood','iron'],demand:['wine','silk','sugar']},
+  {id:'jingge',name:'鲸歌湾',zone:'north',x:510,y:55,yard:1,produce:['leather','herb'],demand:['grain','tea','cloth']},
+  {id:'yinhu',name:'银湖港',zone:'north',x:470,y:175,yard:2,produce:['grain','iron'],demand:['porcelain','spice','coffee']},
+  {id:'hupo',name:'琥珀港',zone:'east',x:660,y:120,yard:2,produce:['silk','tea'],demand:['iron','leather','gem']},
+  {id:'cuiyu',name:'翠玉港',zone:'east',x:800,y:95,yard:3,produce:['porcelain','silk'],demand:['wood','ivory','wine']},
+  {id:'longgu',name:'龙骨岛',zone:'east',x:745,y:225,yard:1,produce:['tea','herb'],demand:['iron','grain','sugar']},
+  {id:'xiangliao',name:'香料城',zone:'south',x:135,y:420,yard:2,produce:['spice','sugar'],demand:['cloth','iron','porcelain']},
+  {id:'chisha',name:'赤砂港',zone:'south',x:255,y:355,yard:1,produce:['ivory','spice'],demand:['wine','grain','silk']},
+  {id:'shanhu',name:'珊瑚镇',zone:'south',x:120,y:505,yard:1,produce:['sugar','cotton'],demand:['wood','iron','herb']},
+  {id:'zhenzhu',name:'珍珠湾',zone:'pearl',x:420,y:340,yard:2,produce:['gem','cotton'],demand:['grain','wine','porcelain']},
+  {id:'fengyu',name:'风语城',zone:'pearl',x:540,y:420,yard:3,produce:['coffee','cloth'],demand:['silk','spice','wood']},
+  {id:'yueya',name:'月牙港',zone:'pearl',x:380,y:470,yard:1,produce:['gem','herb'],demand:['iron','cloth','tea']},
+  {id:'xingjiao',name:'星礁',zone:'gold',x:690,y:370,yard:1,produce:['coffee','ivory'],demand:['iron','cloth','wine']},
+  {id:'heishi',name:'黑石港',zone:'gold',x:820,y:305,yard:3,produce:['iron','gem'],demand:['tea','silk','sugar']},
+  {id:'luori',name:'落日港',zone:'gold',x:760,y:490,yard:2,produce:['cotton','sugar'],demand:['porcelain','herb','spice']},
+];
+const LAND=[
+  'M0 0 L70 0 Q80 60 60 110 Q30 170 55 230 Q70 280 25 320 L0 330 Z',
+  'M290 0 L620 0 Q600 28 520 22 Q440 40 400 25 Q330 45 290 0 Z',
+  'M900 0 L900 560 L860 560 Q880 480 865 400 Q840 340 870 270 Q890 200 850 150 Q840 90 870 30 Z',
+  'M0 560 L900 560 L900 548 Q700 530 560 545 Q400 555 260 535 Q120 545 0 535 Z',
+  'M300 230 Q330 205 360 225 Q380 255 345 270 Q305 272 300 230 Z',
+  'M600 240 Q630 225 655 250 Q660 285 625 290 Q595 275 600 240 Z',
+  'M200 290 Q225 275 245 292 Q250 315 220 320 Q195 312 200 290 Z',
+  'M560 330 Q580 318 600 335 Q605 358 580 362 Q555 352 560 330 Z',
+  'M700 150 Q725 140 740 158 Q745 180 720 185 Q698 175 700 150 Z',
+];
+const SHIP_NAMES=['初雪','海燕','远星','破浪','银鸥','晨曦','北辰','长风','惊涛','夜鸢','沧澜','青鸟','逐日','白鲸','流火'];
+
+/* ========= 人物（全部原创角色） ========= */
+function shade(hex,amt){const n=parseInt(hex.slice(1),16);return '#'+[(n>>16)+amt,((n>>8)&255)+amt,(n&255)+amt].map(v=>clamp(v,0,255).toString(16).padStart(2,'0')).join('');}
+function portrait(c,size=64){
+  const dark=shade(c.skin,-28);let s=`<svg class="pt" width="${size}" height="${size}" viewBox="0 0 120 120" role="img" aria-label="${c.name}">`;
+  s+=`<defs><clipPath id="ptclip"><circle cx="60" cy="60" r="58"/></clipPath></defs><circle cx="60" cy="60" r="58" fill="${c.bg}"/><g clip-path="url(#ptclip)">`;
+  s+=`<path d="M14 122 Q18 84 60 82 Q102 84 106 122 Z" fill="${c.clothes}"/><path d="M48 82 L60 96 L72 82" fill="none" stroke="${shade(c.clothes,34)}" stroke-width="3"/>`;
+  s+=`<rect x="51" y="66" width="18" height="20" rx="4" fill="${dark}"/>`;
+  if(c.hairStyle==='long')s+=`<path d="M34 46 Q24 100 44 108 L76 108 Q96 100 86 46 Z" fill="${c.hair}"/>`;
+  s+=`<circle cx="38" cy="56" r="4" fill="${c.skin}"/><circle cx="82" cy="56" r="4" fill="${c.skin}"/><ellipse cx="60" cy="54" rx="22" ry="26" fill="${c.skin}"/>`;
+  if(c.hairStyle==='short'||c.hairStyle==='long')s+=`<path d="M38 46 Q40 24 60 24 Q80 24 82 46 Q72 36 60 38 Q48 36 38 46 Z" fill="${c.hair}"/>`;
+  if(c.hairStyle==='bun')s+=`<path d="M38 46 Q40 26 60 26 Q80 26 82 46 Q72 36 60 38 Q48 36 38 46 Z" fill="${c.hair}"/><circle cx="60" cy="24" r="9" fill="${c.hair}"/>`;
+  if(c.hairStyle==='bald')s+=`<path d="M38 52 Q34 44 40 38 L43 54 Z M82 52 Q86 44 80 38 L77 54 Z" fill="${c.hair}"/>`;
+  s+=`<path d="M45 46 q6 -3 11 0 M64 46 q6 -3 11 0" stroke="${c.hair}" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+  s+=`<ellipse cx="51" cy="53" rx="2.8" ry="3.2" fill="#22150f"/><ellipse cx="69" cy="53" rx="2.8" ry="3.2" fill="#22150f"/><circle cx="52" cy="52" r="0.9" fill="#fff"/><circle cx="70" cy="52" r="0.9" fill="#fff"/>`;
+  s+=`<path d="M60 55 q-3 7 1 8" stroke="${dark}" stroke-width="1.6" fill="none" stroke-linecap="round"/>`;
+  if(c.beard==='full')s+=`<path d="M40 58 Q40 88 60 90 Q80 88 80 58 Q74 74 60 76 Q46 74 40 58 Z" fill="${c.hair}"/>`;
+  if(c.beard==='goatee')s+=`<path d="M52 72 Q60 86 68 72 Q60 76 52 72 Z" fill="${c.hair}"/>`;
+  if(c.beard==='stubble')s+=`<path d="M42 60 Q44 80 60 82 Q76 80 78 60 Q72 74 60 76 Q48 74 42 60 Z" fill="${c.hair}" opacity=".28"/>`;
+  if(c.mustache)s+=`<path d="M50 65 q10 -5 20 0 q-10 3 -20 0 Z" fill="${c.hair}"/>`;
+  if(c.mouth==='smile')s+=`<path d="M53 68 Q60 74 67 68" stroke="#7a3b30" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  else if(c.mouth==='grin')s+=`<path d="M52 67 Q60 76 68 67 Z" fill="#fff" stroke="#7a3b30" stroke-width="1.5"/>`;
+  else if(c.mouth==='frown')s+=`<path d="M53 71 Q60 66 67 71" stroke="#7a3b30" stroke-width="2" fill="none" stroke-linecap="round"/>`;
+  else s+=`<path d="M54 69 L66 69" stroke="#7a3b30" stroke-width="2" stroke-linecap="round"/>`;
+  const hc=c.hatColor||'#222',trim=c.trim||'#c9a54a';
+  if(c.hat==='tricorn')s+=`<path d="M36 44 Q40 22 60 22 Q80 22 84 44 Z" fill="${hc}"/><path d="M18 46 Q60 24 102 46 Q80 38 60 40 Q40 38 18 46 Z" fill="${hc}"/><path d="M40 41 Q60 35 80 41" stroke="${trim}" stroke-width="1.5" fill="none"/>`;
+  if(c.hat==='bandana')s+=`<path d="M36 46 Q60 36 84 46 L84 36 Q60 22 36 36 Z" fill="${hc}"/><path d="M84 40 q10 4 12 14 q-8 -4 -12 -8 Z" fill="${hc}"/>`;
+  if(c.hat==='turban')s+=`<ellipse cx="60" cy="34" rx="26" ry="15" fill="${hc}"/><path d="M36 38 Q60 30 84 38" stroke="${shade(hc,-30)}" stroke-width="2" fill="none"/><circle cx="60" cy="30" r="3" fill="#f2c14e"/>`;
+  if(c.hat==='cap')s+=`<path d="M36 44 L84 44 L82 32 Q60 24 38 32 Z" fill="${hc}"/><path d="M34 45 L86 45" stroke="${trim}" stroke-width="3"/>`;
+  if(c.hat==='beret')s+=`<path d="M34 42 Q36 22 64 24 Q88 26 84 44 Q60 36 34 42 Z" fill="${hc}"/>`;
+  if(c.acc==='eyepatch')s+=`<ellipse cx="69" cy="53" rx="6.5" ry="5.5" fill="#15100c"/><path d="M40 44 L75 49" stroke="#15100c" stroke-width="1.6"/>`;
+  if(c.acc==='earring')s+=`<circle cx="83" cy="62" r="2.6" fill="none" stroke="#f2c14e" stroke-width="1.5"/>`;
+  if(c.acc==='scar')s+=`<path d="M46 42 L50 58" stroke="#b66a5c" stroke-width="1.6"/>`;
+  if(c.acc==='glasses')s+=`<circle cx="51" cy="53" r="6" fill="none" stroke="#c9a54a" stroke-width="1.5"/><circle cx="69" cy="53" r="6" fill="none" stroke="#c9a54a" stroke-width="1.5"/><path d="M57 53 L63 53" stroke="#c9a54a" stroke-width="1.5"/>`;
+  if(c.acc==='feather')s+=`<path d="M86 30 q8 -16 16 -12 q-4 8 -14 14 Z" fill="#e9e9e9"/>`;
+  return s+`</g></svg>`;
+}
+const CHARS={
+  lin:{name:'林远舟',title:'商会少东',skin:'#f1c9a5',hair:'#2a1a12',hairStyle:'short',clothes:'#2a8a8a',bg:'#1f4d6a',mouth:'smile',bonus:'贸易专精：所有港口买入价 −5%',intro:'从父亲手里接过账本和一艘旧船。他相信每一条航线都是一门生意。'},
+  shen:{name:'沈鹭',title:'领航员',skin:'#e9bd98',hair:'#3b2418',hairStyle:'bun',hat:'cap',hatColor:'#22375a',clothes:'#26426b',bg:'#3d2f5a',mouth:'neutral',acc:'earring',bonus:'航海专精：船队航速 +1',intro:'能凭星辰与洋流辨向的天才领航员，想证明自己也能统领一支船队。'},
+  tie:{name:'哈迪·铁山',title:'前私掠船长',skin:'#b97a52',hair:'#1c1410',hairStyle:'short',hat:'tricorn',hatColor:'#1b1b22',clothes:'#8a2a2a',bg:'#4a2a1e',beard:'full',mouth:'grin',acc:'scar',bonus:'战斗专精：炮击伤害 +20%',intro:'厌倦了替别人打仗的老海狼，这次决定为自己的旗帜而战。'},
+  ahai:{name:'阿海',title:'大副',skin:'#c98c62',hair:'#3a2a1c',hairStyle:'short',hat:'bandana',hatColor:'#c0392b',clothes:'#4a5a6a',bg:'#1a3a4a',beard:'stubble',mouth:'neutral'},
+  qian:{name:'老钱',title:'货栈掌柜',skin:'#f0cfa8',hair:'#666666',hairStyle:'bald',clothes:'#3f6b3a',bg:'#3a4a2a',mustache:true,mouth:'smile',acc:'glasses'},
+  mu:{name:'木叔',title:'船匠',skin:'#d9a878',hair:'#8a8a8a',hairStyle:'bald',clothes:'#6b4a2a',bg:'#4a3a2a',beard:'full',mouth:'neutral'},
+  hong:{name:'红姨',title:'酒馆老板娘',skin:'#f3d1b0',hair:'#8a2f2a',hairStyle:'bun',clothes:'#6a2a5a',bg:'#4a1a3a',mouth:'smile',acc:'earring'},
+  cen:{name:'岑港务长',title:'港务长',skin:'#e8c39e',hair:'#2a2a2a',hairStyle:'short',hat:'cap',hatColor:'#1a2a4a',clothes:'#1f3a6a',bg:'#2a3a5a',mustache:true,mouth:'neutral'},
+  barro:{name:'独眼巴罗',title:'海盗头目',skin:'#b4805a',hair:'#1a1a1a',hairStyle:'long',hat:'bandana',hatColor:'#1a1a1a',clothes:'#3a3a3a',bg:'#2a1a1a',beard:'goatee',mouth:'grin',acc:'eyepatch'},
+  alice:{name:'艾丽丝·蓝',title:'蓝鲸商会代表',skin:'#f6dcc2',hair:'#d9b56a',hairStyle:'long',hat:'beret',hatColor:'#2a5aa8',clothes:'#4f8fd6',bg:'#1a3a6a',mouth:'neutral'},
+  hector:{name:'赫克托',title:'红帆同盟船长',skin:'#d9a878',hair:'#1c1410',hairStyle:'short',hat:'tricorn',hatColor:'#7a1a1a',trim:'#f2c14e',clothes:'#d65a5a',bg:'#5a1a1a',mustache:true,mouth:'frown',acc:'feather'},
+  salim:{name:'萨利姆',title:'金沙公司使节',skin:'#a86a48',hair:'#1a1410',hairStyle:'short',hat:'turban',hatColor:'#d6b04f',clothes:'#8a6a2a',bg:'#5a4a1a',beard:'full',mouth:'smile',acc:'earring'},
+};
+const CAPTAIN_KEYS=['lin','shen','tie'];
+const RIVAL_REP={whale:'alice',redsail:'hector',goldsand:'salim'};
+const LINES={
+  market:['{port}的{prod}便宜得很，装满船再走吧。','听说{dem}在这儿能卖出好价钱，你带了吗？','行情天天变，做生意讲的就是个快。','大船队一进港，价格就得抖三抖。','别一次买太多，价钱会被你自己抬上去的。'],
+  yard:['船体我给你敲得比新的还结实。','要出远洋，炮位可不能空着。','再大的船，也得有人手才能开出港。','龙骨、桅杆、帆——哪样都得花钱。'],
+  tavern:['喝一杯？水手们的嘴里都是情报。','要招人的话，港口里闲着的汉子多得是。','别在海上省口粮，饿肚子的船员会跳船的。','昨晚有几个{rival}的水手在这儿吹牛。'],
+  invest:['{zone}的份额，是靠银子和船炮说话的。','投在{port}的每一枚金币，港口都会记得。','主导了海域，港口的门就会朝你敞开。','{rival}最近在这片海域动作不小。'],
+};
+function npcLine(ctx,p){
+  const pool=LINES[ctx];const line=pool[hash(p.id+ctx+Math.floor(S.day/3))%pool.length];
+  const leader=zoneLeader(p.zone);const rv=leader==='player'?RIVALS[hash(p.id)%3].name:FACTION_NAME[leader];
+  return line.replace('{port}',p.name).replace('{prod}',G[p.produce[0]].name).replace('{dem}',G[p.demand[0]].name).replace('{zone}',zone(p.zone).name).replace('{rival}',rv);
+}
+function npcCard(key,line){const c=CHARS[key];return `<div class="npc">${portrait(c,56)}<div><b>${c.name}</b> <span class="muted">${c.title}</span><div class="say">“${line}”</div></div></div>`;}
+const captain=()=>CHARS[S.captain||'lin'];
+function chooseCaptain(){
+  showModal(`<h2>选择你的船长</h2><p class="muted">每位船长有一项专精，会影响整局游戏。</p><div class="cards">${CAPTAIN_KEYS.map(k=>{const c=CHARS[k];
+    return `<div class="ccard" data-a="pickCaptain" data-c="${k}">${portrait(c,96)}<b>${c.name}</b><span class="muted" style="font-size:12px">${c.title}</span><p>${c.intro}</p><p class="gold">${c.bonus}</p></div>`;}).join('')}</div>`);
+}
+
+/* ========= 状态 ========= */
+let S=null, B=null;
+const port=id=>PORTS.find(p=>p.id===id);
+const zone=id=>ZONES.find(z=>z.id===id);
+const rival=id=>RIVALS.find(r=>r.id===id);
+const T=sh=>SHIP_TYPES[sh.type];
+const totalCrew=()=>S.fleet.reduce((a,s)=>a+s.crew,0);
+const capacity=()=>S.fleet.reduce((a,s)=>a+T(s).cargo,0);
+const cargoUsed=()=>Object.values(S.cargo).reduce((a,b)=>a+b,0)+S.supplies;
+const freeSpace=()=>Math.max(0,capacity()-cargoUsed());
+const fleetValue=()=>S.fleet.reduce((a,s)=>a+T(s).price,0);
+const dateStr=(d=S.day)=>`第${Math.floor(d/360)+1}年 ${Math.floor(d%360/30)+1}月 ${d%30+1}日`;
+function log(msg,cls=''){S.log.unshift({d:S.day,msg,cls});if(S.log.length>150)S.log.length=150;}
+
+function mkShip(type,name,opts={}){
+  const t=SHIP_TYPES[type];
+  return {type,name,hp:t.hp,cannons:opts.cannons??0,crew:opts.crew??0};
+}
+function nextShipName(){
+  const used=new Set(S.fleet.map(s=>s.name));
+  const free=SHIP_NAMES.filter(n=>!used.has(n+'号'));
+  return (free.length?pick(free):'无名')+'号';
+}
+
+function newGame(){
+  S={gold:3000,day:0,pos:'baifan',fleet:[],cargo:{},supplies:30,drift:{},stock:{},share:{},dev:{},mem:{},log:[],
+     captain:null,tab:'port',ptab:'market',won:false,stats:{trades:0,battles:0,wins:0,profit:0}};
+  S.fleet.push(mkShip('sloop','初雪号',{cannons:4,crew:15}));
+  for(const p of PORTS){S.drift[p.id]={};S.stock[p.id]={};S.dev[p.id]=0;
+    for(const g of GOODS){S.drift[p.id][g.id]=rand(0.85,1.15);S.stock[p.id][g.id]=0;}}
+  S.share={
+    west:{player:15,whale:35,redsail:30,goldsand:20},
+    north:{player:0,whale:70,redsail:15,goldsand:15},
+    east:{player:0,whale:30,redsail:30,goldsand:40},
+    south:{player:0,whale:15,redsail:70,goldsand:15},
+    pearl:{player:0,whale:35,redsail:35,goldsand:30},
+    gold:{player:0,whale:15,redsail:15,goldsand:70},
+  };
+  remember('baifan');
+  log('你在白帆港继承了一艘小帆船和 3,000 金币。目标：在六大海域都取得过半的势力份额，称霸沧海。','gold');
+}
+
+/* ========= 价格 ========= */
+function baseMult(p,gid){
+  if(p.produce.includes(gid))return 0.55;
+  if(p.demand.includes(gid))return 1.7;
+  return 0.9+(hash(p.id+gid)%26)/100;
+}
+function price(p,gid){
+  const m=baseMult(p,gid)*S.drift[p.id][gid]*(1+S.stock[p.id][gid]/100);
+  return Math.max(1,Math.round(G[gid].base*m));
+}
+const dominated=zid=>S.share[zid].player>=50;
+function buyPrice(p,gid){let v=price(p,gid);if(dominated(p.zone))v=Math.round(v*0.92);if(S.captain==='lin')v=Math.round(v*0.95);return Math.max(1,v);}
+function sellPrice(p,gid){return Math.max(1,Math.round(price(p,gid)*0.9));}
+const SUPPLY_PRICE=3;
+function remember(pid){
+  const p=port(pid);const prices={};
+  for(const g of GOODS)prices[g.id]=price(p,g.id);
+  S.mem[pid]={day:S.day,prices};
+}
+
+/* ========= 势力份额 ========= */
+function transferShare(zid,to,pts){
+  const sh=S.share[zid];const others=Object.keys(sh).filter(k=>k!==to);
+  const tot=others.reduce((a,k)=>a+sh[k],0);if(tot<=0)return;
+  pts=Math.min(pts,tot);
+  for(const k of others){const take=pts*sh[k]/tot;sh[k]=Math.max(0,sh[k]-take);}
+  sh[to]+=pts;normalizeShare(zid);
+}
+function transferFrom(zid,from,to,pts){
+  const sh=S.share[zid];pts=Math.min(pts,sh[from]);sh[from]-=pts;sh[to]+=pts;normalizeShare(zid);
+}
+function normalizeShare(zid){
+  const sh=S.share[zid];const tot=Object.values(sh).reduce((a,b)=>a+b,0);
+  for(const k in sh)sh[k]=Math.round(sh[k]/tot*1000)/10;
+}
+function zoneLeader(zid){
+  const sh=S.share[zid];let best=null;
+  for(const k in sh)if(!best||sh[k]>sh[best])best=k;
+  return best;
+}
+function checkWin(){
+  if(S.won)return;
+  if(ZONES.every(z=>S.share[z.id].player>=50)){
+    S.won=true;log('六大海域尽归你的旗下，你成为了沧海之主！','gold');
+    showModal(`<h2>称霸沧海</h2><p>${dateStr()}，你的商会在六大海域的份额全部过半。海图上再无对手，你的名字将被写进每一座港口的年鉴。</p>
+      <p class="muted">航行 ${Math.floor(S.day/360)} 年 ${Math.floor(S.day%360/30)} 个月 · 交易 ${S.stats.trades} 次 · 海战 ${S.stats.battles} 场（胜 ${S.stats.wins}）</p>
+      <p>游戏可以继续，尽情经营你的海上帝国。</p><div class="row"><button class="btn primary" data-a="closeModal">继续航行</button></div>`);
+  }
+}
+
+/* ========= 时间 ========= */
+function passDays(n,inPort=false){
+  let starved=false;
+  for(let i=0;i<n;i++){
+    S.day++;
+    if(!inPort){
+      const use=Math.max(1,Math.ceil(totalCrew()/10));
+      if(S.supplies>=use)S.supplies-=use;
+      else{S.supplies=0;starved=true;for(const sh of S.fleet){sh.crew=Math.max(1,sh.crew-Math.ceil(sh.crew*0.05));}}
+    }
+    if(S.day%30===0)monthTick();
+  }
+  if(starved)log('补给耗尽，船员因饥渴不断减员！','bad');
+}
+function monthTick(){
+  const wages=totalCrew()*4;S.gold-=wages;
+  let income=0;
+  for(const z of ZONES)if(dominated(z.id))income+=Math.round(S.share[z.id].player*40);
+  S.gold+=income;
+  for(const r of RIVALS){
+    const zid=Math.random()<0.45?r.home:pick(ZONES).id;
+    transferShare(zid,r.id,rand(0.8,2.6));
+  }
+  for(const p of PORTS)for(const g of GOODS){
+    S.drift[p.id][g.id]=clamp(S.drift[p.id][g.id]*rand(0.92,1.08),0.75,1.3);
+    S.stock[p.id][g.id]*=0.65;
+  }
+  log(`月结：支付船员薪酬 ${fmt(wages)}${income?`，海域主导收益 +${fmt(income)}`:''}。`,income?'good':'');
+  if(S.gold<-5000){for(const sh of S.fleet)sh.crew=Math.max(1,Math.floor(sh.crew*0.8));log('商会严重负债，大量船员弃船而去！','bad');}
+}
+
+/* ========= 航行 ========= */
+function fleetSpeed(){
+  let s=Math.min(...S.fleet.map(sh=>T(sh).speed));
+  if(S.captain==='shen')s+=1;
+  if(S.fleet.some(sh=>sh.crew<T(sh).crew*0.3))s-=1;
+  return Math.max(2,s);
+}
+const dailySupply=()=>Math.max(1,Math.ceil(totalCrew()/10));
+function voyageDays(pid){
+  const a=port(S.pos),b=port(pid);
+  return Math.max(1,Math.ceil(Math.hypot(a.x-b.x,a.y-b.y)/(fleetSpeed()*10)));
+}
+function planVoyage(pid){
+  if(pid===S.pos||B||SAIL)return;
+  const to=port(pid),z=zone(to.zone);const days=voyageDays(pid);const need=days*dailySupply();
+  const low=S.fleet.filter(sh=>sh.crew<Math.ceil(T(sh).crew*0.2));
+  let warn='';
+  if(low.length)warn+=`<p class="bad">${low.map(s=>s.name).join('、')} 船员不足（至少需要满员 20%），无法出航。请先到酒馆招募。</p>`;
+  else if(S.supplies<need)warn+=`<p class="warn">补给不足：需要约 ${need}，现有 ${S.supplies}。途中断粮会导致船员减员。</p>`;
+  showModal(`<h2>前往 ${to.name}</h2>
+    <p>${port(S.pos).name} → ${to.name}（${z.name}） · 航程约 <b>${days}</b> 天 · 船队航速 ${fleetSpeed()}</p>
+    <p>预计消耗补给 ${need}（现有 ${S.supplies}）· 特产：${to.produce.map(g=>G[g].name).join('、')} · 紧缺：${to.demand.map(g=>G[g].name).join('、')}</p>
+    ${warn}
+    <div class="row"><button class="btn primary" data-a="sail" data-pid="${pid}" ${low.length?'disabled':''}>出航</button><button class="btn" data-a="closeModal">取消</button></div>`);
+}
+let SAIL=null;
+const SAIL_OK=new Set(['eventOk','attackRival','avoidRival','bfire','bboard','bflee','battleDone','closeModal','help','tab','ptab','pickCaptain']);
+function sail(pid){
+  const from=port(S.pos),to=port(pid);const days=voyageDays(pid);closeModal();
+  log(`从 ${from.name} 启航前往 ${to.name}，预计 ${days} 天。`);
+  SAIL={from,to,days,done:0,extra:0,perDay:clamp(2800/days,220,600),eventAt:Math.max(1,Math.ceil(days/2)),eventFired:false,t0:performance.now(),paused:false,segP:0,segDay:0,p:0};
+  document.getElementById('map').classList.add('sailing');
+  const rl=document.getElementById('routeline');rl.setAttribute('x1',from.x);rl.setAttribute('y1',from.y);rl.setAttribute('x2',to.x);rl.setAttribute('y2',to.y);rl.style.display='';
+  const wk=document.getElementById('wake');wk.setAttribute('x1',from.x);wk.setAttribute('y1',from.y-8);wk.style.display='';
+  positionShip(0);renderTop();updateBanner();requestAnimationFrame(sailFrame);
+}
+function sailFrame(now){
+  if(!SAIL||SAIL.paused)return;
+  const elapsedDays=(now-SAIL.t0)/SAIL.perDay;const tot=SAIL.days+SAIL.extra;
+  const target=Math.min(tot,Math.floor(elapsedDays));
+  while(SAIL.done<target){
+    passDays(1);SAIL.done++;renderTop();updateBanner();
+    if(!SAIL.eventFired&&SAIL.done===SAIL.eventAt){
+      SAIL.eventFired=true;SAIL.paused=true;const pauseAt=performance.now();SAIL.segP=SAIL.p;SAIL.segDay=SAIL.done;
+      rollEvent(SAIL.to,extra=>{if(!SAIL)return;SAIL.extra+=extra;SAIL.paused=false;SAIL.t0+=performance.now()-pauseAt;updateBanner();requestAnimationFrame(sailFrame);});
+      return;
+    }
+  }
+  const remain=Math.max(0.0001,tot-SAIL.segDay);
+  SAIL.p=clamp(SAIL.segP+(1-SAIL.segP)*((elapsedDays-SAIL.segDay)/remain),0,1);
+  positionShip(SAIL.p);
+  if(SAIL.done>=tot&&SAIL.p>=1){finishSail();return;}
+  requestAnimationFrame(sailFrame);
+}
+function positionShip(p){
+  const a=SAIL.from,b=SAIL.to;const x=a.x+(b.x-a.x)*p,y=a.y+(b.y-a.y)*p;
+  const m=document.getElementById('shipmark');m.setAttribute('transform',`translate(${x},${y-14})`);
+  m.querySelector('.flip').setAttribute('transform',b.x<a.x?'scale(-1,1)':'');
+  const wk=document.getElementById('wake');wk.setAttribute('x2',x);wk.setAttribute('y2',y-8);
+}
+function updateBanner(){
+  const el=document.getElementById('sailbanner');if(!SAIL){el.style.display='none';return;}
+  el.style.display='block';el.innerHTML=`⛵ 航行中 → <b>${SAIL.to.name}</b> · 第 ${SAIL.done}/${SAIL.days+SAIL.extra} 天 · 补给 ${S.supplies}`;
+}
+function finishSail(){
+  const pid=SAIL.to.id;SAIL=null;
+  document.getElementById('map').classList.remove('sailing');
+  document.getElementById('routeline').style.display='none';document.getElementById('wake').style.display='none';
+  updateBanner();arrive(pid);
+}
+function arrive(pid){
+  S.pos=pid;remember(pid);log(`抵达 ${port(pid).name}。`,'good');
+  S.tab='port';S.ptab='market';save(true);render();
+}
+function rollEvent(to,done){
+  const r=Math.random();
+  if(r<0.34){done(0);return;}
+  if(r<0.46){
+    const sh=pick(S.fleet);const dmg=Math.round(T(sh).hp*rand(0.1,0.3));sh.hp-=dmg;
+    let extra=randInt(1,2);let txt=`风暴袭来，${sh.name} 受损 ${dmg} 点，船队被迫绕行，航程延长 ${extra} 天。`;
+    if(sh.hp<=0){if(S.fleet.length>1){S.fleet.splice(S.fleet.indexOf(sh),1);loseCargoFor(sh);txt+=` ${sh.name} 在风暴中沉没！`;}else{sh.hp=1;txt+=' 船体几近解体，勉强保住。';}}
+    log(txt,'bad');showEvent('风暴',txt,()=>done(extra));return;
+  }
+  if(r<0.56){
+    const enemy=makeEnemy('pirate');
+    showEvent('海盗！',`“把货交出来，也许我留你们一条命！”——一支海盗船队从雾中逼近：${describeFleet(enemy)}。他们向你开火了！`,()=>startBattle('pirate',null,enemy,()=>done(0)),'barro');return;
+  }
+  if(r<0.66){log('顺风顺水，航程缩短一天。','good');showEvent('顺风',`信风鼓满帆面，船队提前一天靠岸。`,()=>done(-1));return;}
+  if(r<0.74){
+    const g=pick(GOODS);const q=Math.min(freeSpace(),randInt(3,15));
+    if(q>0){S.cargo[g.id]=(S.cargo[g.id]||0)+q;log(`捞起遇难船只的漂流货箱：${G[g.id].name} ×${q}。`,'good');showEvent('漂流物',`海面上漂着遇难船的货箱，你的船员捞起了 ${G[g.id].name} ×${q}。`,()=>done(0));}
+    else{const gold=randInt(100,400);S.gold+=gold;log(`捞起一只漂流钱箱，获得 ${gold} 金币。`,'good');showEvent('漂流物',`海面上漂着一只钱箱，里面有 ${gold} 金币。`,()=>done(0));}
+    return;
+  }
+  if(r<0.82){
+    const sh=pick(S.fleet);const loss=Math.max(1,Math.floor(sh.crew*0.1));sh.crew=Math.max(1,sh.crew-loss);
+    log(`${sh.name} 爆发热病，${loss} 名船员病故。`,'bad');showEvent('热病',`${sh.name} 上爆发热病，${loss} 名船员病故。船医建议下次多备药材。`,()=>done(0));return;
+  }
+  // 遭遇对手商会船队
+  const sh=S.share[to.zone];const cands=RIVALS.filter(r=>sh[r.id]>0);
+  const tot=cands.reduce((a,r)=>a+sh[r.id],0);let x=Math.random()*tot,rv=cands[0];
+  for(const r of cands){x-=sh[r.id];if(x<=0){rv=r;break;}}
+  const enemy=makeEnemy('rival');
+  const rep=CHARS[RIVAL_REP[rv.id]];
+  showModal(`<div class="npc big">${portrait(rep,92)}<div><h2>遭遇 ${rv.name} 船队</h2><p class="muted" style="font-size:12px;margin-top:-4px">${rep.name} · ${rep.title}</p><p>“这片海不欢迎新面孔。识相的话，让开航道。”</p><p>${zone(to.zone).name}海域上，${rv.name} 的船队正沿相反航向驶过：${describeFleet(enemy)}。</p></div></div>
+    <p class="muted">击败对手船队可夺取其在本海域约 6 点份额；但对方火力可能远胜于你。</p>
+    <div class="row"><button class="btn danger" data-a="attackRival" data-rid="${rv.id}">发动攻击</button><button class="btn" data-a="avoidRival">避开</button></div>`);
+  window.__pending={rv,enemy,done,zone:to.zone};
+}
+function showEvent(title,text,cb,who='ahai'){
+  window.__eventCb=cb;const c=CHARS[who];
+  showModal(`<div class="npc big">${portrait(c,92)}<div><h2>${title}</h2><p class="muted" style="font-size:12px;margin-top:-4px">${c.name} · ${c.title}</p><p>${text}</p></div></div><div class="row"><button class="btn primary" data-a="eventOk">继续</button></div>`);
+}
+function loseCargoFor(sh){
+  const ratio=T(sh).cargo/(capacity()+T(sh).cargo);
+  for(const k in S.cargo){S.cargo[k]=Math.floor(S.cargo[k]*(1-ratio));if(S.cargo[k]<=0)delete S.cargo[k];}
+  S.supplies=Math.floor(S.supplies*(1-ratio));
+  fitCargo();
+}
+function fitCargo(){
+  let over=cargoUsed()-capacity();
+  while(over>0){
+    const keys=Object.keys(S.cargo);
+    if(!keys.length){S.supplies=Math.max(0,S.supplies-over);break;}
+    const k=keys.sort((a,b)=>G[a].base-G[b].base)[0];const d=Math.min(over,S.cargo[k]);
+    S.cargo[k]-=d;over-=d;if(S.cargo[k]<=0)delete S.cargo[k];
+  }
+}
+
+/* ========= 海战 ========= */
+function describeFleet(f){
+  const m={};for(const s of f)m[SHIP_TYPES[s.type].name]=(m[SHIP_TYPES[s.type].name]||0)+1;
+  return `${f.length} 艘（${Object.entries(m).map(([k,v])=>`${k}×${v}`).join('，')}）`;
+}
+function makeEnemy(kind){
+  const fv=fleetValue();const myCannons=S.fleet.reduce((a,x)=>a+x.cannons,0);const myCrew=totalCrew();const myHp=S.fleet.reduce((a,x)=>a+x.hp,0);
+  let pool,n,names,cannonBudget,crewBudget,hpBudget;
+  if(kind==='pirate'){
+    pool=fv<8000?['sloop']:fv<20000?['sloop','schooner']:fv<50000?['schooner','merchant']:['schooner','merchant','galleon','frigate'];
+    n=fv<8000?1:clamp(randInt(1,S.fleet.length+1),1,4);names=['黑旗号','骷髅号','怒涛号','血月号','秃鹫号','毒鳐号'];
+    cannonBudget=Math.max(3,Math.round(myCannons*rand(0.6,1.1)));crewBudget=Math.max(8,Math.round(myCrew*rand(0.7,1.1)));hpBudget=Math.max(60,Math.round(myHp*rand(0.6,1.0)));
+  }else{
+    pool=fv<12000?['schooner','merchant']:fv<45000?['schooner','merchant','galleon']:['merchant','galleon','frigate'];
+    n=clamp(randInt(2,S.fleet.length+2),2,5);names=['旗舰','护航舰','武装商船','运输船','巡逻舰'];
+    cannonBudget=Math.max(8,Math.round(myCannons*rand(0.8,1.15))+4);crewBudget=Math.max(30,Math.round(myCrew*rand(0.9,1.2))+8);hpBudget=Math.max(200,Math.round(myHp*rand(0.9,1.25)));
+  }
+  return Array.from({length:n},(_,i)=>{const t=pick(pool),tt=SHIP_TYPES[t];const hp=clamp(Math.round(hpBudget/n*rand(0.8,1.2)),40,tt.hp);
+    return {type:t,name:names[i%names.length],hp,maxHp:hp,
+      cannons:clamp(Math.round(cannonBudget/n*rand(0.75,1.25)),2,tt.cannons),
+      crew:clamp(Math.round(crewBudget/n*rand(0.75,1.2)),5,tt.crew)};});
+}
+function startBattle(kind,rivalId,enemy,onDone){
+  B={kind,rivalId,enemy,log:[],onDone,round:1,over:false,result:null};
+  S.stats.battles++;
+  blog(kind==='pirate'?'海盗船队逼近，战斗开始！':`与 ${rival(rivalId).name} 的船队交火！`);
+  renderBattle();
+}
+function blog(msg,cls=''){B.log.push({msg,cls});}
+const alive=f=>f.filter(s=>s.hp>0);
+function volley(att,def,mine){
+  let total=0;
+  for(const a of alive(att)){
+    if(a.cannons<=0)continue;const targets=alive(def);if(!targets.length)break;
+    const t=pick(targets);const dmg=Math.round(a.cannons*rand(2.5,5)*(mine&&S.captain==='tie'?1.2:1));t.hp-=dmg;total+=dmg;
+    if(t.hp<=0){t.hp=0;blog(`${t.name} 被击沉！`,mine?'good':'bad');}
+  }
+  if(total)blog(`${mine?'我方':'敌方'}齐射，共造成 ${total} 点损伤。`);
+}
+function board(att,def,mine,mult){
+  for(const a of alive(att)){
+    const targets=alive(def);if(!targets.length)break;
+    const t=pick(targets);const loss=Math.max(1,Math.round(a.crew*rand(0.2,0.5)*mult));
+    t.crew-=loss;a.crew=Math.max(1,a.crew-Math.max(1,Math.round(loss*0.3)));
+    if(t.crew<=0){t.crew=0;t.hp=0;t.captured=true;blog(mine?`${t.name} 船员全灭，被我方俘获！`:`${t.name} 被敌方登船夺取！`,mine?'good':'bad');}
+    else blog(`${a.name} 强行接舷 ${t.name}，对方船员 −${loss}。`);
+  }
+}
+function enemySpeed(){return Math.min(...B.enemy.map(s=>SHIP_TYPES[s.type].speed));}
+function enemyTurn(){
+  const weak=alive(S.fleet).some(s=>s.crew<T(s).crew*0.3);
+  if(weak&&Math.random()<0.6)board(B.enemy,S.fleet,false,0.7);else volley(B.enemy,S.fleet,false);
+}
+function battleAct(a){
+  if(!B||B.over)return;
+  if(a==='fire'){volley(S.fleet,B.enemy,true);if(!checkBattleEnd())enemyTurn();}
+  else if(a==='board'){board(S.fleet,B.enemy,true,1);if(!checkBattleEnd())enemyTurn();}
+  else if(a==='flee'){
+    const chance=clamp(0.35+(fleetSpeed()-enemySpeed())*0.12,0.15,0.9);
+    if(Math.random()<chance){blog('船队成功脱离战斗！','good');endBattle('flee');return;}
+    blog('撤退失败，敌军追上来了！','bad');enemyTurn();
+  }
+  checkBattleEnd();B.round++;renderBattle();
+}
+function checkBattleEnd(){
+  if(B.over)return true;
+  if(!alive(B.enemy).length){endBattle('win');return true;}
+  if(!alive(S.fleet).length){endBattle('lose');return true;}
+  return false;
+}
+function endBattle(result){
+  B.over=true;B.result=result;
+  // 清理我方沉船
+  const sunk=S.fleet.filter(s=>s.hp<=0);
+  for(const s of sunk){S.fleet.splice(S.fleet.indexOf(s),1);if(S.fleet.length)loseCargoFor(s);}
+  if(result==='win'){
+    S.stats.wins++;
+    let loot=Math.round(B.enemy.reduce((a,s)=>a+SHIP_TYPES[s.type].price,0)*0.12*rand(0.8,1.3));
+    const cap=B.enemy.filter(s=>s.captured);
+    loot+=cap.reduce((a,s)=>a+Math.round(SHIP_TYPES[s.type].price*0.3),0);
+    S.gold+=loot;
+    blog(`战斗胜利！缴获战利品与赃款 ${fmt(loot)} 金币${cap.length?`（含 ${cap.length} 艘俘获船只的变卖所得）`:''}。`,'good');
+    log(`击败${B.kind==='pirate'?'海盗':rival(B.rivalId).name}船队，获得 ${fmt(loot)} 金币。`,'good');
+    if(B.kind==='rival'){const zid=B.zone;transferFrom(zid,B.rivalId,'player',6);blog(`${rival(B.rivalId).name} 在 ${zone(zid).name} 的份额被你夺走 6 点。`,'good');checkWin();}
+  }else if(result==='lose'){
+    S.cargo={};S.supplies=20;S.gold=Math.max(0,Math.floor(S.gold*0.5));
+    S.fleet=[mkShip('sloop','余生号',{cannons:2,crew:10})];
+    blog('船队全灭……你抱着桅杆漂流，被路过的渔船救起。失去全部货物与半数金币，一位老船主借给你一艘破旧小帆船。','bad');
+    log('海战惨败，船队全灭。被渔船救起后从头再来。','bad');
+  }else{
+    if(sunk.length)blog(`撤退途中损失 ${sunk.map(s=>s.name).join('、')}。`,'bad');
+  }
+  renderBattle();
+}
+function renderBattle(){
+  const eName=B.kind==='pirate'?'海盗船队':rival(B.rivalId).name+'船队';
+  const row=(s,max)=>`<div class="bship ${s.hp<=0?'dead':''}"><b>${s.name}</b> <span class="muted">${SHIP_TYPES[s.type].name}</span>
+    <div class="hpbar"><i style="width:${clamp(s.hp/max*100,0,100)}%;background:${s.hp/max<0.3?'var(--bad)':'var(--good)'}"></i></div>
+    <small class="muted">耐久 ${Math.max(0,s.hp)}/${max} · 火炮 ${s.cannons} · 船员 ${s.crew}</small></div>`;
+  const mine=S.fleet.map(s=>row(s,T(s).hp)).join('')||'<p class="bad">（无）</p>';
+  const theirs=B.enemy.map(s=>row(s,s.maxHp)).join('');
+  const logs=B.log.slice(-14).map(l=>`<div class="${l.cls}">${l.msg}</div>`).join('');
+  const flee=clamp(0.35+(fleetSpeed()-enemySpeed())*0.12,0.15,0.9);
+  const actions=B.over
+    ?`<div class="row"><button class="btn primary" data-a="battleDone">${B.result==='win'?'继续航行':B.result==='lose'?'重整旗鼓':'继续航行'}</button></div>`
+    :`<div class="row"><button class="btn primary" data-a="bfire">炮击</button><button class="btn" data-a="bboard">接舷战</button><button class="btn" data-a="bflee">撤退（约 ${Math.round(flee*100)}%）</button><span class="muted">第 ${B.round} 回合</span></div>
+       <p class="muted" style="font-size:12px">炮击：火炮数决定伤害。接舷：靠船员数削减对方船员，船员归零即俘获（可变卖）。撤退成功率取决于航速差。</p>`;
+  const eCap=B.kind==='pirate'?CHARS.barro:CHARS[RIVAL_REP[B.rivalId]];const myCap=captain();
+  showModal(`<h2>海战 · ${eName}</h2><div class="vs">${portrait(myCap,52)}<div><b>${myCap.name}</b><br><span class="muted" style="font-size:12px">${myCap.title}</span></div><span class="vsx">VS</span><div style="text-align:right"><b>${eCap.name}</b><br><span class="muted" style="font-size:12px">${eCap.title}</span></div>${portrait(eCap,52)}</div><div class="battle"><div><h3>我方船队</h3>${mine}</div><div><h3>${eName}</h3>${theirs}</div></div>
+    <div class="blog" id="blog">${logs}</div>${actions}`);
+  const el=document.getElementById('blog');if(el)el.scrollTop=el.scrollHeight;
+}
+
+/* ========= 交易 / 港口操作 ========= */
+function buy(gid,q){
+  const p=port(S.pos);const pr=buyPrice(p,gid);
+  if(q==='max')q=Math.min(Math.floor(Math.max(0,S.gold)/pr),freeSpace());
+  q=Math.min(+q,freeSpace(),Math.floor(Math.max(0,S.gold)/pr));
+  if(q<=0)return toast(S.gold<pr?'金币不足':'货舱已满');
+  S.gold-=q*pr;S.cargo[gid]=(S.cargo[gid]||0)+q;S.stats.trades++;
+  S.stock[p.id][gid]=clamp(S.stock[p.id][gid]+q*0.5,-40,60);
+  S.avgCost=S.avgCost||{};S.avgCost[gid]=pr;
+  remember(p.id);render();
+}
+function sell(gid,q){
+  const p=port(S.pos);const have=S.cargo[gid]||0;if(!have)return;
+  if(q==='all')q=have;q=Math.min(+q,have);const pr=sellPrice(p,gid);
+  S.gold+=q*pr;S.cargo[gid]-=q;if(S.cargo[gid]<=0)delete S.cargo[gid];S.stats.trades++;
+  S.stock[p.id][gid]=clamp(S.stock[p.id][gid]-q*0.5,-40,60);
+  transferShare(p.zone,'player',q*pr/6000);checkWin();
+  remember(p.id);render();
+}
+function buySupplies(q){
+  if(q==='max')q=Math.min(freeSpace(),Math.floor(Math.max(0,S.gold)/SUPPLY_PRICE));
+  q=Math.min(+q,freeSpace(),Math.floor(Math.max(0,S.gold)/SUPPLY_PRICE));
+  if(q<=0)return toast('金币不足或货舱已满');S.gold-=q*SUPPLY_PRICE;S.supplies+=q;render();
+}
+function sellSupplies(q){q=Math.min(+q,S.supplies);if(q<=0)return;S.supplies-=q;S.gold+=q*1;render();}
+function buyShip(type){
+  const t=SHIP_TYPES[type];if(S.gold<t.price)return toast('金币不足');
+  if(S.fleet.length>=6)return toast('船队最多 6 艘');
+  S.gold-=t.price;S.fleet.push(mkShip(type,nextShipName()));log(`购入 ${t.name}「${S.fleet.at(-1).name}」。记得到酒馆招募船员。`,'good');render();
+}
+function shipRefund(sh){return Math.round(T(sh).price*0.6*(sh.hp/T(sh).hp))+sh.cannons*75;}
+function sellShip(i){
+  const sh=S.fleet[i];if(!sh)return;if(S.fleet.length<=1)return toast('不能卖掉最后一艘船');
+  if(cargoUsed()>capacity()-T(sh).cargo)return toast('货舱容量不足以容纳现有货物，请先卸货');
+  const v=shipRefund(sh);S.gold+=v;S.fleet.splice(i,1);log(`出售 ${sh.name}，获得 ${fmt(v)} 金币。`);render();
+}
+function repair(i){
+  const sh=S.fleet[i];const cost=(T(sh).hp-sh.hp)*4;if(cost<=0)return;
+  const pay=Math.min(cost,Math.max(0,S.gold));const pts=Math.floor(pay/4);if(pts<=0)return toast('金币不足');
+  S.gold-=pts*4;sh.hp+=pts;render();
+}
+function repairAll(){for(let i=0;i<S.fleet.length;i++){const sh=S.fleet[i];const cost=(T(sh).hp-sh.hp)*4;if(cost>0&&S.gold>=cost){S.gold-=cost;sh.hp=T(sh).hp;}}render();}
+function addCannon(i,q){
+  const sh=S.fleet[i];q=Math.min(+q,T(sh).cannons-sh.cannons,Math.floor(Math.max(0,S.gold)/150));
+  if(q<=0)return toast('已达上限或金币不足');S.gold-=q*150;sh.cannons+=q;render();
+}
+function removeCannon(i,q){const sh=S.fleet[i];q=Math.min(+q,sh.cannons);if(q<=0)return;sh.cannons-=q;S.gold+=q*75;render();}
+function hire(i,q){
+  const sh=S.fleet[i];q=Math.min(+q,T(sh).crew-sh.crew,Math.floor(Math.max(0,S.gold)/25));
+  if(q<=0)return toast('已满员或金币不足');S.gold-=q*25;sh.crew+=q;render();
+}
+function dismiss(i,q){const sh=S.fleet[i];q=Math.min(+q,sh.crew-1);if(q<=0)return;sh.crew-=q;render();}
+function rumor(){
+  if(S.gold<50)return toast('金币不足');S.gold-=50;
+  const others=PORTS.filter(p=>p.id!==S.pos);const p=pick(others);
+  let best=null,bestR=0;
+  for(const g of GOODS){const r=price(p,g.id)/G[g.id].base;if(r>bestR){bestR=r;best=g;}}
+  const pr=price(p,best.id);
+  S.mem[p.id]=S.mem[p.id]||{day:S.day,prices:{}};S.mem[p.id].prices[best.id]=pr;S.mem[p.id].day=S.day;
+  log(`酒馆情报：${p.name}（${zone(p.zone).name}）的 ${best.name} 售价高达约 ${pr} 金币。`,'gold');
+  render();showModal(`<div class="npc big">${portrait(CHARS.hong,92)}<div><h2>酒馆情报</h2><p class="muted" style="font-size:12px;margin-top:-4px">红姨 · 酒馆老板娘</p><p>“${p.name}那边的${best.name}，这阵子卖到 ${pr} 金币上下，${zone(p.zone).name}的商人都在往那儿运。这消息值你那 50 个金币吧？”</p></div></div><div class="row"><button class="btn primary" data-a="closeModal">谢了</button></div>`);
+}
+function invest(amt){
+  amt=+amt;if(S.gold<amt)return toast('金币不足');
+  const p=port(S.pos);const cur=S.share[p.zone].player;const pts=amt/(400+10*cur);
+  S.gold-=amt;transferShare(p.zone,'player',pts);S.dev[p.id]+=amt/5000;
+  log(`向 ${p.name} 投资 ${fmt(amt)} 金币，${zone(p.zone).name} 份额 +${pts.toFixed(1)}。`,'good');
+  checkWin();render();
+}
+function rest(days){passDays(days,true);log(`在 ${port(S.pos).name} 停泊 ${days} 天。`);remember(S.pos);save(true);render();}
+
+/* ========= 存档 ========= */
+function save(silent){try{localStorage.setItem('aot-save',JSON.stringify(S));if(!silent)toast('已保存');}catch(e){if(!silent)toast('保存失败：浏览器存储不可用');}}
+function load(){
+  try{const raw=localStorage.getItem('aot-save');if(!raw)return toast('没有存档');
+    const d=JSON.parse(raw);if(!d||!d.fleet||!d.share)return toast('存档损坏');S=d;S.stats=S.stats||{trades:0,battles:0,wins:0};toast('已读取存档');render();}
+  catch(e){toast('读取失败');}
+}
+function hasSave(){try{return !!localStorage.getItem('aot-save');}catch(e){return false;}}
+
+/* ========= UI ========= */
+function showModal(html){document.getElementById('modal').innerHTML=`<div class="modal-bg"><div class="modal">${html}</div></div>`;}
+function closeModal(){document.getElementById('modal').innerHTML='';}
+let toastT=null;
+function toast(msg){
+  let el=document.getElementById('toast');
+  if(!el){el=document.createElement('div');el.id='toast';el.style.cssText='position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1c3450;border:1px solid var(--line);padding:8px 14px;border-radius:6px;z-index:20;font-size:13px;box-shadow:0 6px 20px rgba(0,0,0,.4)';document.body.appendChild(el);}
+  el.textContent=msg;el.style.display='block';clearTimeout(toastT);toastT=setTimeout(()=>el.style.display='none',2200);
+}
+
+function render(){renderTop();renderTabs();renderPanel();updateMap();}
+function renderTop(){
+  const p=port(S.pos);
+  const cap=captain();
+  document.getElementById('top').innerHTML=`<span class="title">沧海纪</span>
+    <span class="cap">${portrait(cap,28)}<b>${cap.name}</b></span>
+    <span class="stat">金币 <b class="${S.gold<0?'bad':'gold'}">${fmt(S.gold)}</b></span>
+    <span class="stat">${dateStr()}</span>
+    <span class="stat">${SAIL?`航行中 → <b>${SAIL.to.name}</b>（第 ${SAIL.done}/${SAIL.days+SAIL.extra} 天）`:`停泊 <b>${p.name}</b>（${zone(p.zone).name}）`}</span>
+    <span class="stat">船队 <b>${S.fleet.length}</b> 艘 · 航速 ${fleetSpeed()}</span>
+    <span class="stat">货舱 <b>${cargoUsed()}/${capacity()}</b></span>
+    <span class="stat">补给 <b class="${S.supplies<dailySupply()*5?'warn':''}">${S.supplies}</b>（日耗 ${dailySupply()}）</span>
+    <span class="spacer"></span>
+    <span class="row"><button class="btn" data-a="help">玩法</button><button class="btn" data-a="save">保存</button><button class="btn" data-a="load">读取</button><button class="btn" data-a="newGame">新游戏</button></span>`;
+}
+const TABS=[['port','港口'],['fleet','船队'],['share','势力'],['journal','航海志']];
+function renderTabs(){document.getElementById('tabs').innerHTML=TABS.map(([id,n])=>`<button class="${S.tab===id?'active':''}" data-a="tab" data-tab="${id}">${n}</button>`).join('');}
+function renderPanel(){
+  const el=document.getElementById('panel');
+  if(S.tab==='port')el.innerHTML=renderPort();
+  else if(S.tab==='fleet')el.innerHTML=renderFleet();
+  else if(S.tab==='share')el.innerHTML=renderShare();
+  else el.innerHTML=renderJournal();
+}
+function renderPort(){
+  const p=port(S.pos),z=zone(p.zone);const leader=zoneLeader(z.id);
+  const sub=[['market','市场'],['yard','造船厂'],['tavern','酒馆'],['invest','投资']];
+  let html=`<h2>${p.name} <span class="muted" style="font-size:13px">${z.name} · 造船厂等级 ${p.yard} · 发展度 ${S.dev[p.id].toFixed(1)}</span></h2>
+    <p class="muted" style="font-size:12px">海域主导：<span style="color:${FACTION_COLOR[leader]}">${FACTION_NAME[leader]}</span>（${S.share[z.id][leader].toFixed(1)}%）${dominated(z.id)?' · <span class="good">你享有 8% 进货折扣</span>':''}</p>
+    <div class="subtabs">${sub.map(([id,n])=>`<button class="btn ${S.ptab===id?'active':''}" data-a="ptab" data-ptab="${id}">${n}</button>`).join('')}</div>`;
+  html+=npcCard({market:'qian',yard:'mu',tavern:'hong',invest:'cen'}[S.ptab],npcLine(S.ptab,p));
+  if(S.ptab==='market')html+=renderMarket(p);
+  else if(S.ptab==='yard')html+=renderYard(p);
+  else if(S.ptab==='tavern')html+=renderTavern(p);
+  else html+=renderInvest(p);
+  return html;
+}
+function renderMarket(p){
+  const rows=GOODS.map(g=>{
+    const bp=buyPrice(p,g.id),sp=sellPrice(p,g.id),have=S.cargo[g.id]||0;const ratio=price(p,g.id)/g.base;
+    const tag=p.produce.includes(g.id)?'<span class="badge low">特产</span>':p.demand.includes(g.id)?'<span class="badge high">紧缺</span>':ratio<0.85?'<span class="badge low">偏低</span>':ratio>1.25?'<span class="badge high">偏高</span>':'';
+    return `<tr><td>${g.name} ${tag}</td><td class="r">${bp} / <span class="muted">${sp}</span></td><td class="r">${have||'<span class="muted">-</span>'}</td>
+      <td><span class="row nowrap"><button class="btn sm" data-a="buy" data-g="${g.id}" data-q="1">买1</button><button class="btn sm" data-a="buy" data-g="${g.id}" data-q="10">买10</button><button class="btn sm" data-a="buy" data-g="${g.id}" data-q="max">买满</button>
+      <button class="btn sm" data-a="sell" data-g="${g.id}" data-q="10" ${have?'':'disabled'}>卖10</button><button class="btn sm" data-a="sell" data-g="${g.id}" data-q="all" ${have?'':'disabled'}>全卖</button></span></td></tr>`;
+  }).join('');
+  return `<div class="card"><div class="row"><b>补给</b> <span class="muted">${SUPPLY_PRICE} 金币/单位 · 现有 ${S.supplies} · 日耗 ${dailySupply()} · 空舱 ${freeSpace()}</span></div>
+    <div class="row" style="margin-top:6px"><button class="btn sm" data-a="buySup" data-q="10">+10</button><button class="btn sm" data-a="buySup" data-q="50">+50</button><button class="btn sm" data-a="buySup" data-q="max">买满</button><button class="btn sm" data-a="sellSup" data-q="10">卖10</button></div></div>
+    <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="font-size:12px">大量买入会推高当地价格，抛售会压低价格；每月逐步恢复。在一个海域卖货会缓慢提升你在该海域的份额。</p>`;
+}
+function renderYard(p){
+  const shipsForSale=YARD_SHIPS[p.yard].map(t=>{const s=SHIP_TYPES[t];
+    return `<tr><td><b>${s.name}</b></td><td class="r">${s.cargo}</td><td class="r">${s.hp}</td><td class="r">${s.cannons}</td><td class="r">${s.speed}</td><td class="r">${s.crew}</td><td class="r gold">${fmt(s.price)}</td><td><button class="btn sm" data-a="buyShip" data-t="${t}" ${S.gold<s.price?'disabled':''}>购买</button></td></tr>`;}).join('');
+  const mine=S.fleet.map((sh,i)=>{const t=T(sh);const rc=(t.hp-sh.hp)*4;
+    return `<div class="card"><div class="row"><b>${sh.name}</b><span class="muted">${t.name}</span><span class="spacer"></span><span class="muted">售价 ${fmt(shipRefund(sh))}</span></div>
+      <div class="hpbar"><i style="width:${sh.hp/t.hp*100}%"></i></div>
+      <div class="row muted" style="font-size:12px">耐久 ${sh.hp}/${t.hp} · 火炮 ${sh.cannons}/${t.cannons} · 船员 ${sh.crew}/${t.crew}</div>
+      <div class="row" style="margin-top:6px">
+        <button class="btn sm" data-a="repair" data-i="${i}" ${rc>0?'':'disabled'}>修理（${fmt(rc)}）</button>
+        <button class="btn sm" data-a="addCannon" data-i="${i}" data-q="1">+1 炮（150）</button>
+        <button class="btn sm" data-a="addCannon" data-i="${i}" data-q="5">+5 炮</button>
+        <button class="btn sm" data-a="removeCannon" data-i="${i}" data-q="5">−5 炮</button>
+        <button class="btn sm danger" data-a="sellShip" data-i="${i}" ${S.fleet.length>1?'':'disabled'}>出售</button>
+      </div></div>`;}).join('');
+  return `<h3>出售船只</h3><table><thead><tr><th>船型</th><th class="r">载货</th><th class="r">耐久</th><th class="r">炮位</th><th class="r">航速</th><th class="r">船员</th><th class="r">价格</th><th></th></tr></thead><tbody>${shipsForSale}</tbody></table>
+    <p class="muted" style="font-size:12px">${p.yard<3?'更大的船只需要在 3 级造船厂购买（铁锚城、灰岩堡、翠玉港、风语城、黑石港）。':'这里可以买到所有船型。'}新船不含火炮与船员。</p>
+    <h3>我的船只 <button class="btn sm" data-a="repairAll">全部修理</button></h3>${mine}`;
+}
+function renderTavern(p){
+  const rows=S.fleet.map((sh,i)=>{const t=T(sh);const low=sh.crew<Math.ceil(t.crew*0.2);
+    return `<tr><td>${sh.name} <span class="muted">${t.name}</span></td><td class="r ${low?'bad':''}">${sh.crew}/${t.crew}</td>
+      <td><span class="row"><button class="btn sm" data-a="hire" data-i="${i}" data-q="5">+5</button><button class="btn sm" data-a="hire" data-i="${i}" data-q="20">+20</button><button class="btn sm" data-a="hire" data-i="${i}" data-q="${t.crew-sh.crew}" ${sh.crew>=t.crew?'disabled':''}>满员</button><button class="btn sm" data-a="dismiss" data-i="${i}" data-q="5">遣散5</button></span></td></tr>`;}).join('');
+  return `<div class="card"><b>招募船员</b> <span class="muted">25 金币/人，月薪 4 金币/人。船员低于满员 20% 无法出航，低于 30% 航速 −1；接舷战靠船员数取胜。</span>
+    <table style="margin-top:6px"><thead><tr><th>船只</th><th class="r">船员</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <div class="card"><b>打听情报</b> <span class="muted">50 金币，得知某港口当前卖价最高的商品，并记入航海志。</span><div class="row" style="margin-top:6px"><button class="btn" data-a="rumor">买酒打听（50）</button></div></div>
+    <div class="card"><b>停泊休整</b> <span class="muted">停泊期间不消耗补给。跨月时物价会重新波动、对手商会会行动。</span><div class="row" style="margin-top:6px"><button class="btn" data-a="rest" data-d="7">停泊 7 天</button><button class="btn" data-a="rest" data-d="30">停泊 30 天</button></div></div>`;
+}
+function renderInvest(p){
+  const z=zone(p.zone);const sh=S.share[z.id];const cur=sh.player;
+  const est=a=>(a/(400+10*cur)).toFixed(1);
+  return `<div class="card"><b>${z.name} 势力份额</b>${shareBar(z.id)}
+    <p class="muted" style="font-size:12px;margin-top:8px">份额 ≥ 50% 即主导该海域：每月获得「份额 × 40」金币收益，并在该海域所有港口享受 8% 进货折扣。六大海域全部主导即获胜。</p></div>
+    <div class="card"><b>向 ${p.name} 投资</b> <span class="muted">建设港口以提升你的商会在 ${z.name} 的份额。份额越高，进一步扩张的成本越高。</span>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" data-a="invest" data-amt="1000" ${S.gold<1000?'disabled':''}>投资 1,000（+${est(1000)}）</button>
+      <button class="btn" data-a="invest" data-amt="5000" ${S.gold<5000?'disabled':''}>投资 5,000（+${est(5000)}）</button>
+      <button class="btn" data-a="invest" data-amt="20000" ${S.gold<20000?'disabled':''}>投资 20,000（+${est(20000)}）</button>
+    </div></div>
+    <p class="muted" style="font-size:12px">其他扩张手段：在本海域卖出货物（缓慢），或在航行中击败对手商会的船队（一次夺取 6 点）。</p>`;
+}
+function shareBar(zid){
+  const sh=S.share[zid];const keys=['player','whale','redsail','goldsand'];
+  return `<div class="bar" style="margin-top:6px">${keys.map(k=>`<i style="width:${sh[k]}%;background:${FACTION_COLOR[k]}" title="${FACTION_NAME[k]} ${sh[k].toFixed(1)}%"></i>`).join('')}</div>
+    <div class="legend">${keys.map(k=>`<span><i style="background:${FACTION_COLOR[k]}"></i>${FACTION_NAME[k]} ${sh[k].toFixed(1)}%</span>`).join('')}</div>`;
+}
+function renderFleet(){
+  const cargoRows=Object.entries(S.cargo).map(([g,q])=>`<tr><td>${G[g].name}</td><td class="r">${q}</td><td class="r muted">${S.avgCost&&S.avgCost[g]?S.avgCost[g]:'-'}</td></tr>`).join('');
+  const ships=S.fleet.map(sh=>{const t=T(sh);return `<div class="card"><div class="row"><b>${sh.name}</b><span class="muted">${t.name}</span></div>
+    <div class="hpbar"><i style="width:${sh.hp/t.hp*100}%"></i></div>
+    <div class="row muted" style="font-size:12px">耐久 ${sh.hp}/${t.hp} · 载货 ${t.cargo} · 火炮 ${sh.cannons}/${t.cannons} · 船员 ${sh.crew}/${t.crew} · 航速 ${t.speed}</div></div>`;}).join('');
+  const cap=captain();
+  return `<h2>船队</h2><div class="npc">${portrait(cap,64)}<div><b>${cap.name}</b> <span class="muted">${cap.title} · 船长</span><div class="gold" style="font-size:12px">${cap.bonus}</div><div class="say">“${cap.intro}”</div></div></div><p class="muted" style="font-size:12px">航速 ${fleetSpeed()}（取最慢船，船员不足减速） · 总载货 ${capacity()} · 月薪支出 ${fmt(totalCrew()*4)} · 船队估值 ${fmt(fleetValue())}</p>${ships}
+    <h3>货舱 ${cargoUsed()}/${capacity()}</h3>
+    <table><thead><tr><th>货物</th><th class="r">数量</th><th class="r">最近进价</th></tr></thead><tbody><tr><td>补给</td><td class="r">${S.supplies}</td><td class="r muted">${SUPPLY_PRICE}</td></tr>${cargoRows}</tbody></table>`;
+}
+function renderShare(){
+  let income=0;for(const z of ZONES)if(dominated(z.id))income+=Math.round(S.share[z.id].player*40);
+  const zones=ZONES.map(z=>{const leader=zoneLeader(z.id);const ports=PORTS.filter(p=>p.zone===z.id).map(p=>p.name).join('、');
+    return `<div class="card"><div class="row"><b style="color:${z.color}">${z.name}</b><span class="muted" style="font-size:12px">${ports}</span><span class="spacer"></span><span style="color:${FACTION_COLOR[leader]};font-size:12px">${dominated(z.id)?'★ 你主导':S.share[z.id][leader]>=50?`${FACTION_NAME[leader]} 主导`:'群雄逐鹿'}</span></div>${shareBar(z.id)}</div>`;}).join('');
+  const won=ZONES.filter(z=>dominated(z.id)).length;
+  return `<h2>势力版图</h2><p class="muted" style="font-size:12px">已主导 ${won}/6 个海域 · 每月主导收益 ${fmt(income)} 金币</p>${zones}
+    <h3>对手商会</h3>${RIVALS.map(r=>`<p style="font-size:13px"><span style="color:${r.color}">■</span> <b>${r.name}</b> · 大本营 ${zone(r.home).name} · 每月会在各海域扩张，尤其巩固大本营。</p>`).join('')}`;
+}
+function renderJournal(){
+  const rows=GOODS.map(g=>{
+    let lo=null,hi=null;
+    for(const pid in S.mem){const pr=S.mem[pid].prices[g.id];if(pr==null)continue;
+      if(!lo||pr<lo.pr)lo={pid,pr,day:S.mem[pid].day};if(!hi||pr>hi.pr)hi={pid,pr,day:S.mem[pid].day};}
+    if(!lo)return '';
+    const spread=hi.pr*0.9-lo.pr;
+    return `<tr><td>${g.name}</td><td>${port(lo.pid).name} <span class="muted">${lo.pr}</span></td><td>${port(hi.pid).name} <span class="muted">${hi.pr}</span></td><td class="r ${spread>0?'good':'muted'}">${spread>0?'+'+Math.round(spread):'-'}</td></tr>`;
+  }).join('');
+  const logs=S.log.map(l=>`<div><span class="d">${dateStr(l.d)}</span><span class="${l.cls}">${l.msg}</span></div>`).join('');
+  return `<h2>航海志</h2><h3>已知价格（按到访 / 情报记录）</h3>
+    <table><thead><tr><th>商品</th><th>最低价港口</th><th>最高价港口</th><th class="r">单件毛利*</th></tr></thead><tbody>${rows}</tbody></table>
+    <p class="muted" style="font-size:12px">*按最高价的 90% 卖出估算，且价格随时间波动，仅供参考。到访过 ${Object.keys(S.mem).length}/${PORTS.length} 个港口。</p>
+    <h3>日志</h3><div class="log">${logs}</div>`;
+}
+
+/* ========= 地图 ========= */
+function initMap(){
+  const svg=document.getElementById('map');
+  let s=`<defs>
+    <pattern id="waves" width="46" height="22" patternUnits="userSpaceOnUse"><path d="M0 11 Q11.5 2 23 11 T46 11" fill="none" stroke="#1c4d6d" stroke-width="1" opacity=".45"/><animateTransform attributeName="patternTransform" type="translate" from="0 0" to="46 0" dur="8s" repeatCount="indefinite"/></pattern>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    <radialGradient id="sea" cx="50%" cy="45%" r="70%"><stop offset="0" stop-color="#11405f"/><stop offset="1" stop-color="#0a2740"/></radialGradient>
+  </defs>
+  <rect width="900" height="560" fill="url(#sea)"/><rect width="900" height="560" fill="url(#waves)"/>`;
+  for(const l of LAND)s+=`<path d="${l}" fill="#2b4a3c" stroke="#4a7a5c" stroke-width="2"/>`;
+  for(const z of ZONES)s+=`<text x="${z.label[0]}" y="${z.label[1]}" class="zlabel" fill="${z.color}">${z.name}</text>`;
+  s+=`<g id="route"></g>`;
+  for(const p of PORTS)s+=`<g class="port" data-a="sailTo" data-pid="${p.id}" style="cursor:pointer"><title></title>
+    <circle class="dom" cx="${p.x}" cy="${p.y}" r="12" fill="none" stroke-width="3" opacity=".9"/>
+    <circle class="dot" cx="${p.x}" cy="${p.y}" r="6" fill="#dbe7f3" stroke="#0b1a2a" stroke-width="1.5"/>
+    <text x="${p.x}" y="${p.y+24}" text-anchor="middle" class="plabel">${p.name}</text></g>`;
+  s+=`<line id="routeline" stroke="#f2c14e" stroke-width="1.5" stroke-dasharray="5 7" opacity=".75" style="display:none"/>
+      <line id="wake" stroke="#cfe8f5" stroke-width="3" stroke-dasharray="2 5" opacity=".45" stroke-linecap="round" style="display:none"/>
+      <g id="shipmark" filter="url(#glow)"><g class="flip"><g class="boat">
+        <path d="M-13 3 Q-15 8 -8 10 L8 10 Q15 8 13 3 Z" fill="#6b4a2a" stroke="#2a1a0a" stroke-width="1"/>
+        <line x1="0" y1="3" x2="0" y2="-17" stroke="#e6eef7" stroke-width="1.5"/>
+        <path d="M1.5 -15 L13 -1 L1.5 1 Z" fill="#f2e9d8"/><path d="M-1.5 -12 L-10 -2 L-1.5 0 Z" fill="#f2c14e"/>
+        <path d="M0 -17 l7 2 l-7 2 Z" fill="#e8646c"/></g></g></g>
+      <g transform="translate(60,510)" opacity=".7"><circle r="22" fill="none" stroke="#8fa6bd"/><path d="M0 -20 L5 0 L0 20 L-5 0 Z" fill="#f2c14e"/><text y="-26" text-anchor="middle" fill="#8fa6bd" font-size="10">N</text></g>`;
+  svg.innerHTML=s;
+}
+function updateMap(){
+  const cur=port(S.pos);
+  document.querySelectorAll('#map .port').forEach(g=>{
+    const p=port(g.dataset.pid);const leader=zoneLeader(p.zone);const sh=S.share[p.zone][leader];
+    const dom=g.querySelector('.dom');dom.setAttribute('stroke',sh>=50?FACTION_COLOR[leader]:zone(p.zone).color);dom.setAttribute('opacity',sh>=50?'0.95':'0.25');
+    const dot=g.querySelector('.dot');dot.setAttribute('fill',p.id===S.pos?'#f2c14e':S.mem[p.id]?'#dbe7f3':'#7f95ab');
+    g.querySelector('title').textContent=p.id===S.pos?`${p.name}（当前位置）`:`${p.name} · 约 ${voyageDays(p.id)} 天`;
+  });
+  if(!SAIL){const m=document.getElementById('shipmark');m.setAttribute('transform',`translate(${cur.x},${cur.y-14})`);m.querySelector('.flip').setAttribute('transform','');}
+}
+
+/* ========= 帮助 ========= */
+function help(){
+  showModal(`<h2>玩法说明</h2>
+  <p><b>目标</b>：在西洋、北海、东海、南洋、珍珠海、黄金海六大海域都取得 ≥50% 的势力份额。</p>
+  <p><b>贸易</b>：每个港口有「特产」（约 55% 基准价）和「紧缺」（约 170% 基准价）。低买高卖，注意货舱容量与补给占位。大量买卖会影响当地价格，跨月逐步恢复。</p>
+  <p><b>航行</b>：点击地图上的港口出航。航程取决于距离与船队航速（取最慢船）。每天消耗补给 = 船员数 ÷ 10；断粮会减员。</p>
+  <p><b>事件</b>：风暴、海盗、顺风、漂流物、热病，以及与对手商会船队相遇（可选择攻击）。</p>
+  <p><b>势力份额</b>：三种方式提升：投资港口（投资页）、在该海域卖货（缓慢）、击败对手商会船队（+6）。主导海域每月有收益，并有进货折扣。三家对手商会每月也在扩张。</p>
+  <p><b>船队</b>：造船厂买船、修理、装炮；酒馆招募船员、打听情报、停泊休整。新船需要先招募船员才能出航。船队上限 6 艘。</p>
+  <p><b>海战</b>：炮击靠火炮，接舷靠船员，撤退靠航速。全灭会被救起从头再来，但会失去全部货物和一半金币。</p>
+  <p><b>存档</b>：每次抵港自动保存到浏览器本地；也可手动保存/读取。</p>
+  <div class="row"><button class="btn primary" data-a="closeModal">开始航行</button></div>`);
+}
+
+/* ========= 事件绑定 ========= */
+const ACTIONS={
+  tab:d=>{S.tab=d.tab;render();},
+  ptab:d=>{S.ptab=d.ptab;render();},
+  buy:d=>buy(d.g,d.q),sell:d=>sell(d.g,d.q),
+  buySup:d=>buySupplies(d.q),sellSup:d=>sellSupplies(d.q),
+  buyShip:d=>buyShip(d.t),sellShip:d=>sellShip(+d.i),repair:d=>repair(+d.i),repairAll:()=>repairAll(),
+  addCannon:d=>addCannon(+d.i,d.q),removeCannon:d=>removeCannon(+d.i,d.q),
+  hire:d=>hire(+d.i,d.q),dismiss:d=>dismiss(+d.i,d.q),rumor:()=>rumor(),invest:d=>invest(d.amt),rest:d=>rest(+d.d),
+  sailTo:d=>planVoyage(d.pid),sail:d=>sail(d.pid),
+  closeModal:()=>closeModal(),help:()=>help(),
+  save:()=>save(false),load:()=>load(),
+  newGame:()=>{showModal(`<h2>开始新游戏？</h2><p>当前进度会被覆盖（存档在下次抵港时自动写入）。</p><div class="row"><button class="btn danger" data-a="confirmNew">开始新游戏</button><button class="btn" data-a="closeModal">取消</button></div>`);},
+  confirmNew:()=>{newGame();closeModal();render();chooseCaptain();},
+  pickCaptain:d=>{S.captain=CAPTAIN_KEYS.includes(d.c)?d.c:'lin';log(`${CHARS[S.captain].name} 就任船长。`,'gold');closeModal();render();help();},
+  eventOk:()=>{const cb=window.__eventCb;window.__eventCb=null;closeModal();render();if(cb)cb();},
+  attackRival:d=>{const pd=window.__pending;window.__pending=null;startBattle('rival',d.rid,pd.enemy,pd.done);B.zone=pd.zone;},
+  avoidRival:()=>{const pd=window.__pending;window.__pending=null;closeModal();log('你调整航向，避开了对手的船队。');pd.done(0);},
+  bfire:()=>battleAct('fire'),bboard:()=>battleAct('board'),bflee:()=>battleAct('flee'),
+  battleDone:()=>{const cb=B.onDone;B=null;closeModal();render();if(cb)cb(0);},
+};
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-a]');if(!b)return;
+  const a=b.dataset.a;if(b.disabled)return;
+  if(SAIL&&!SAIL_OK.has(a)){toast('航行中，抵港后再操作');return;}
+  if(ACTIONS[a])ACTIONS[a](b.dataset);
+});
+
+/* ========= 启动 ========= */
+initMap();
+if(hasSave()){
+  try{S=JSON.parse(localStorage.getItem('aot-save'));S.stats=S.stats||{trades:0,battles:0,wins:0};}catch(e){S=null;}
+}
+if(!S){newGame();render();chooseCaptain();}else{if(!S.captain)S.captain='lin';render();toast('已载入上次存档');}
+</script>
+</body>
+</html>
