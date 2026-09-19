@@ -180,7 +180,7 @@ export class NpcFleet {
         }
         v.npc = n; v.c.visible = true; this.views.set(n.id, v);
         // 船型剪影按规模分三档
-        const sc = n.kind === 'fisher' ? 0.62 : n.ships >= 3 ? 1.12 : n.ships === 2 ? 0.9 : 0.74;
+        const sc = n.kind === 'fisher' ? 0.52 : n.ships >= 3 ? 0.92 : n.ships === 2 ? 0.74 : 0.62;
         v.baseScale = sc; v.spr.scale.set(sc);
         v.spr.tint = TINT[n.faction];
         v.flag.clear().rect(-2, -8 - sc * 8, 7, 4).fill(FACTION_COLOR[n.faction] || 0xcccccc);
@@ -196,7 +196,9 @@ export class NpcFleet {
       const flip = Math.cos(n.heading) < 0;
       v.spr.scale.x = flip ? -v.baseScale : v.baseScale;
       v.flag.x = flip ? -4 : 0;
-      v.tag.visible = z > 0.55;
+      const ts = Math.max(0.35, Math.min(1.5, 1 / z));
+      v.tag.scale.set(ts); v.tag.y = -10 - 10 * v.baseScale;
+      v.tag.visible = z > 0.8;                       // 拉近了才显示阵营小标
     }
     for (const [id, v] of [...this.views]) if (!seen.has(id)) { v.c.visible = false; this.views.delete(id); this.free.push(v); }
   }

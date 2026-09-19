@@ -380,7 +380,7 @@ function guidance() {
 function renderMapCtl() {
   const el = document.getElementById('mapctl'); if (!el || !map) return;
   if (B) { el.innerHTML = ''; return; }
-  const zoomBtns = `<button class="btn" data-a="zoomOut" title="缩小">−</button><button class="btn" data-a="zoomIn" title="放大">＋</button><button class="btn" data-a="fitWorld" title="全图">🌍</button>`;
+  const zoomBtns = `<button class="btn" data-a="zoomOut" title="缩小">−</button><span class="stat" id="zoomv" style="min-width:42px;text-align:center" title="缩放倍率">${map.zoom.toFixed(1)}×</span><button class="btn" data-a="zoomIn" title="放大">＋</button><button class="btn" data-a="sailView" title="航行视角：拉近并跟随船队">⛵ 航行视角</button><button class="btn" data-a="fitWorld" title="全图">🌍</button>`;
   const dirBtn = `<button class="btn" data-a="directory" title="港口名录">📖 名录</button><button class="btn" data-a="legend" title="图例">？</button>`;
   if (S.dest) el.innerHTML = `<button class="btn" data-a="hailNpc" title="向附近船只招呼">🚩 招呼</button>${dirBtn}<button class="btn" data-a="recenter" title="镜头回到船队">⌖ 船队</button><button class="btn" data-a="speed" id="speedbtn" title="航行速度">▶ ${map.speedMul}×</button>${zoomBtns}`;
   else if (map.mode === 'port') el.innerHTML = `${dirBtn}<button class="btn primary" data-a="seaMap">⛵ 出海 · 海图</button>`;
@@ -572,6 +572,7 @@ export const ACTIONS = {
   zoomIn: () => { map.setZoom(map.zoom * 1.4); renderMapCtl(); },
   zoomOut: () => { map.setZoom(map.zoom / 1.4); renderMapCtl(); },
   fitWorld: () => { map.fitWorld(); renderMapCtl(); },
+  sailView: () => { map.recenter(); renderMapCtl(); },
   directory: () => portDirectory(),
   legend: () => showModal(`<h2>海图图例</h2>
     <table><tbody>

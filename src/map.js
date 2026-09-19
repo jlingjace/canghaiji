@@ -14,7 +14,10 @@ import { clamp } from './util.js';
 
 export const WS = 1;                       // 逻辑单位 → 世界像素
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
-export const ZOOM_MIN = 0.22, ZOOM_MAX = 2.4;
+export const ZOOM_MIN = 0.22, ZOOM_MAX = 3.4;
+/* 航行视图：地图拉近，船按真实世界比例显示（不再是恒定屏幕尺寸的图标）。
+   SHIP_W 是船在世界坐标里的尺寸系数，32px 贴图 × 0.78 ≈ 25 逻辑单位 ≈ 2 经纬度。 */
+export const SAIL_ZOOM = 1.9, PORT_ZOOM = 1.15, SHIP_W = 0.78;
 
 export class WorldMap {
   constructor() {
@@ -120,11 +123,24 @@ export class WorldMap {
     const wx = (sx - this.world.x) / z0, wy = (sy - this.world.y) / z0;
     this.zoom = z1; this.world.scale.set(z1);
     this.world.position.set(sx - wx * z1, sy - wy * z1);
-    this.follow = false; this.clampCamera(); this.applyZoomScaling();
+    this.follow = false; this.zoomTarget = null; this.clampCamera(); this.applyZoomScaling();
   }
   setZoom(z) {
     const vw = this.app.screen.width, vh = this.app.screen.height;
+    this.zoomTarget = null;
     this.zoomAt(vw / 2, vh / 2, clamp(z, ZOOM_MIN, ZOOM_MAX) / this.zoom);
+  }
+  /** 直接套用一个缩放值，保持当前的跟随状态（平滑缩放用） */
+  applyZoom(z) {
+    this.zoom = clamp(z, ZOOM_MIN, ZOOM_MAX);
+    this.world.scale.set(this.zoom);
+    this.applyZoomScaling();
+    if (this.follow) this.followCamera(); else this.clampCamera();
+  }
+  /** 平滑推到某个缩放级别；follow=true 时镜头同时跟住船队 */
+  glideZoom(z, follow = true) {
+    this.zoomTarget = clamp(z, ZOOM_MIN, ZOOM_MAX);
+    if (follow) this.follow = true;
   }
   fitWorld() {
     const vw = this.app.screen.width, vh = this.app.screen.height;
@@ -135,15 +151,19 @@ export class WorldMap {
   }
   /** 图标与文字保持接近固定的屏幕尺寸，并按缩放级别隐藏次要标签 */
   applyZoomScaling() {
-    const k = clamp(1 / this.zoom, 0.5, 2.0);
+    // 港口是地图符号：只做「部分反向缩放」，拉近时跟着世界一起变大，拉远时也不至于消失
+    const k = clamp(Math.pow(1 / this.zoom, 0.6), 0.45, 2.2);
     for (const id in this.ports) {
       const o = this.ports[id]; o.c.scale.set(k);
       const minTier = this.zoom < 0.42 ? 3 : this.zoom < 0.62 ? 2 : 1;
       o.label.visible = o.p.tier >= minTier || o.p.id === S.pos || o.p.id === S.dest;
+      o.label.scale.set(clamp(1 / (this.zoom * k), 0.45, 1.6));      // 文字仍保持可读
     }
-    for (const t of this.zoneLabels) { t.scale.set(k); t.alpha = this.zoom < 1.3 ? 0.55 : 0.2; }
-    this.ship.scale.set(1.35 * k * (this.flip ? -1 : 1), 1.35 * k);
-    if (this.npc) this.npc.setScale(k);
+    for (const t of this.zoneLabels) { t.scale.set(clamp(1 / this.zoom, 0.5, 2.4)); t.alpha = this.zoom < 1.3 ? 0.55 : 0.18; }
+    const zv = document.getElementById('zoomv'); if (zv) zv.textContent = `${this.zoom.toFixed(1)}×`;
+    // 船是世界里的实体：只按世界比例显示，拉远就该变小
+    this.ship.scale.set(SHIP_W * (this.flip ? -1 : 1), SHIP_W);
+    if (this.npc) this.npc.setScale(1);
   }
 
   /* ----- 场景模式 ----- */
@@ -154,7 +174,7 @@ export class WorldMap {
     this.port.root.visible = m === 'port';
     this.battle.root.visible = m === 'battle';
     if (m === 'port') this.port.show(S.pos);
-    if (m === 'sea') { this.follow = true; this.snapCamera(); this.applyZoomScaling(); }
+    if (m === 'sea') { this.follow = true; this.snapCamera(); this.glideZoom(S.dest ? SAIL_ZOOM : PORT_ZOOM, true); this.applyZoomScaling(); }
     audio.playBgm(m === 'battle' ? 'battle' : m === 'port' ? 'port' : 'sea');
   }
 
@@ -203,7 +223,8 @@ export class WorldMap {
     const prev = S.voyage;
     const { path, length } = this.planRoute(pid);
     S.voyage = { from: S.pos, to: pid, path, leg: 0, total: length, traveled: 0, eventFired: prev ? prev.eventFired : false, days: prev ? prev.days : 0 };
-    S.dest = pid; this.follow = true; this.refreshPorts(); this.drawRoute();
+    S.dest = pid; this.refreshPorts(); this.drawRoute();
+    this.glideZoom(SAIL_ZOOM, true);                    // 出航就把镜头推到航行视角
   }
   drawRoute() {
     this.routeG.clear();
@@ -267,10 +288,12 @@ export class WorldMap {
     else { this.dir = 'N'; this.flip = false; }
   }
   spawnWake() {
-    const g = new Graphics().rect(-1.5, -1.5, 3, 3).fill(0xdff3ff);
-    const bx = S.ship.x * WS - Math.cos(this.heading) * 7, by = S.ship.y * WS - Math.sin(this.heading) * 7 + 2;
-    g.position.set(bx + (Math.random() * 4 - 2), by + (Math.random() * 3 - 1.5)); g.alpha = 0.6;
-    this.wakeLayer.addChild(g); this.wakes.push({ g, life: 1.4 });
+    const r = 1.1 + Math.random() * 0.8;
+    const g = new Graphics().rect(-r, -r, r * 2, r * 2).fill(0xdff3ff);
+    const back = 32 * SHIP_W * 0.42;                      // 从船尾冒出来，随船一起放大
+    const bx = S.ship.x * WS - Math.cos(this.heading) * back, by = S.ship.y * WS - Math.sin(this.heading) * back + 1.5;
+    g.position.set(bx + (Math.random() * 3 - 1.5), by + (Math.random() * 2.4 - 1.2)); g.alpha = 0.55;
+    this.wakeLayer.addChild(g); this.wakes.push({ g, life: 1.6 });
   }
 
   /* ----- 每帧 ----- */
@@ -290,6 +313,11 @@ export class WorldMap {
     if (this.mode === 'battle') { this.battle.tick(dt); return; }
     const [sx, sy] = this.weather.shakeOffset(); this.app.stage.position.set(Math.round(sx), Math.round(sy));
     if (this.mode === 'port') { if (!modalOpen) this.port.tick(dt); return; }
+    if (this.zoomTarget != null) {
+      const d = this.zoomTarget - this.zoom;
+      if (Math.abs(d) < 0.008) { this.applyZoom(this.zoomTarget); this.zoomTarget = null; }
+      else this.applyZoom(this.zoom + d * Math.min(1, dt * 4.5));
+    }
     if (!modalOpen) { if (S.dest) this.move(dt); this.npc.tick(dt, modalOpen); }
     this.placeShip();
     if (this.follow) this.followCamera();
@@ -300,8 +328,7 @@ export class WorldMap {
     this.ship.position.set(S.ship.x * WS, S.ship.y * WS);
     const bob = Math.floor(performance.now() / (S.dest ? 280 : 700)) % 2;
     this.ship.texture = this.shipTex[this.dir][bob];
-    const k = clamp(1 / this.zoom, 0.5, 2.0);
-    this.ship.scale.set(1.35 * k * (this.flip ? -1 : 1), 1.35 * k);
+    this.ship.scale.set(SHIP_W * (this.flip ? -1 : 1), SHIP_W);
   }
   updateNight() {
     const lonShift = (S.ship.x / MAP_W - 0.5) * 0.5;      // 经度带来的时差
@@ -333,7 +360,11 @@ export class WorldMap {
     this.world.x = ww <= vw ? (vw - ww) / 2 : clamp(this.world.x, vw - ww, 0);
     this.world.y = wh <= vh ? (vh - wh) / 2 : clamp(this.world.y, vh - wh, 0);
   }
-  recenter() { this.follow = true; }
+  recenter(glide = true) {
+    this.follow = true;
+    if (glide) this.glideZoom(S.dest ? SAIL_ZOOM : PORT_ZOOM, true);
+    else this.snapCamera();
+  }
   /** 屏幕坐标 → 逻辑地图坐标 */
   toWorld(sx, sy) { return { x: (sx - this.world.x) / this.zoom / WS, y: (sy - this.world.y) / this.zoom / WS }; }
 }
