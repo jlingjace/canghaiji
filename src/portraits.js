@@ -1,4 +1,9 @@
 import { clamp, hash } from './util.js';
+import { PORTRAIT_ART } from './art_assets.js';
+
+const esc = t => String(t).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+/** 这个角色有没有手绘立绘 */
+const artOf = c => c && c.id && PORTRAIT_ART[c.id];
 
 export function shade(hex, amt) {
   const n = parseInt(hex.slice(1), 16);
@@ -7,6 +12,8 @@ export function shade(hex, amt) {
 
 /** 小圆头像（紧凑卡片用） */
 export function portrait(c, size = 64) {
+  const art = artOf(c);
+  if (art) return `<span class="pt pt-img" style="width:${size}px;height:${size}px"><img src="${art}" alt="${esc(c.name)}" loading="lazy" decoding="async"></span>`;
   const dark = shade(c.skin, -28);
   let s = `<svg class="pt" width="${size}" height="${size}" viewBox="0 0 120 120" role="img" aria-label="${c.name}">`;
   s += `<defs><clipPath id="ptclip"><circle cx="60" cy="60" r="58"/></clipPath></defs><circle cx="60" cy="60" r="58" fill="${c.bg}"/><g clip-path="url(#ptclip)">`;
@@ -48,6 +55,8 @@ export function portrait(c, size = 64) {
  */
 export function bust(c, w = 160) {
   const h = Math.round(w * 1.25);
+  const art = artOf(c);
+  if (art) return `<span class="bust bust-img" style="width:${w}px;height:${h}px"><img src="${art}" alt="${esc(c.name)}" loading="lazy" decoding="async"></span>`;
   const skin = c.skin, dark = shade(skin, -28), light = shade(skin, 16);
   const cl = c.clothes, clD = shade(cl, -34), clL = shade(cl, 30), trim = c.trim || '#c9a54a', eye = c.eyes || '#2b1b12';
   const inner = c.inner || '#efe6d2', hair = c.hair, hc = c.hatColor || '#222';

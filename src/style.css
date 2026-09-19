@@ -116,6 +116,12 @@ kbd{background:#06101a;border:1px solid var(--line2);padding:0 5px;font:10px var
 
 /* ---------- 立绘 ---------- */
 .bust{display:block}
+/* 手绘立绘：与程序化 SVG 共用同一批外框 / 动画 class */
+.pt-img{display:inline-block;overflow:hidden;border-radius:50%;line-height:0}
+.pt-img img{width:100%;height:100%;object-fit:cover;object-position:50% 16%;display:block}
+.bust-img{display:block;overflow:hidden;line-height:0}
+.bust-img img{width:100%;height:100%;object-fit:cover;object-position:50% 12%;display:block}
+.bust-wrap.flip .bust-img img{transform:scaleX(-1)}
 .bust .m-open{display:none}
 .bust.talk .m-open{display:inline}
 .bust.talk .m-closed{display:none}

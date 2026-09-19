@@ -123,6 +123,7 @@ export const CHARS = {
   hector: { name: '赫克托', title: '红帆同盟船长', skin: '#d9a878', hair: '#1c1410', hairStyle: 'short', hat: 'tricorn', hatColor: '#7a1a1a', trim: '#f2c14e', clothes: '#d65a5a', bg: '#5a1a1a', mustache: true, mouth: 'frown', acc: 'feather', outfit: 'uniform', inner: '#f3ead6', eyes: '#2a1a12' },
   salim: { name: '萨利姆', title: '金沙公司使节', skin: '#a86a48', hair: '#1a1410', hairStyle: 'short', hat: 'turban', hatColor: '#d6b04f', clothes: '#8a6a2a', bg: '#5a4a1a', beard: 'full', mouth: 'smile', acc: 'earring', outfit: 'robe', inner: '#f3ead6', trim: '#d6b04f', eyes: '#2a1a12' },
 };
+for (const k in CHARS) CHARS[k].id = k;   // 供 portraits.js 查手绘素材
 export const CAPTAIN_KEYS = ['lin', 'shen', 'tie'];
 export const RIVAL_REP = { whale: 'alice', redsail: 'hector', goldsand: 'salim' };
 export const LINES = {
