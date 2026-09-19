@@ -10,6 +10,15 @@ export const PORTRAIT_ART = {
   lin:  '/art/portraits/lin.jpg',    // 林远舟 · 商会少东
   shen: '/art/portraits/shen.jpg',   // 沈鹭 · 领航员
   tie:  '/art/portraits/tie.jpg',    // 哈迪·铁山 · 前私掠船长
+  ahai: '/art/portraits/ahai.jpg',   // 阿海 · 大副
+  qian: '/art/portraits/qian.jpg',   // 老钱 · 货栈掌柜
+  mu:   '/art/portraits/mu.jpg',     // 木叔 · 船匠
+  hong: '/art/portraits/hong.jpg',   // 红姨 · 酒馆老板娘
+  cen:  '/art/portraits/cen.jpg',    // 岑港务长
+  barro:'/art/portraits/barro.jpg',  // 独眼巴罗 · 海盗头目
+  alice:'/art/portraits/alice.jpg',  // 艾丽丝·蓝 · 蓝鲸商会代表
+  hector:'/art/portraits/hector.jpg',// 赫克托 · 红帆同盟船长
+  salim:'/art/portraits/salim.jpg',  // 萨利姆 · 金沙公司使节
 };
 
 /** 港口背景按海域风格共用一张，而不是 40 个港口各一张 */
