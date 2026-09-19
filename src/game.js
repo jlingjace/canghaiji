@@ -6,11 +6,15 @@ import { START_PORT, VICTORY_ZONES } from './data.js';
 
 export let S = null;   // 存档状态
 export let B = null;   // 战斗状态
-export const SAVE_KEY = 'aot-save-v2';
+export const SAVE_KEY = 'aot-save-v3';
+export const OLD_SAVE_KEYS = ['aot-save-v2', 'aot-save'];
 export const hooks = {
   render() {}, renderTop() {}, showModal() {}, closeModal() {}, toast() {},
   renderBattle() {}, onArrive() {}, rollEvent() {}, openPortTab() {}, openSeaMap() {},
   onEvent() {}, showDialogue() {}, questPorts() { return new Set(); }, portMarkers() { return {}; },
+  hoverPort() {}, npcDay() {},
+  /** 由表现层注入：某港口的真实绕行航程长度（逻辑单位）。默认直线兜底。 */
+  routeLen(pid) { const b = port(pid); return Math.hypot(S.ship.x - projX(b.lon), S.ship.y - projY(b.lat)); },
 };
 
 export const port = id => PORTS.find(p => p.id === id);
@@ -58,6 +62,7 @@ export function newGame() {
     others.forEach((r, i) => { const v = i === others.length - 1 ? rest : Math.round(rest / others.length); sh[r.id] += v; rest -= v; });
     S.share[z.id] = sh;
   }
+  migrate();
   remember(START_PORT);
   log('你在白帆港继承了一艘小帆船和 3,000 金币。目标：在六大海域都取得过半的势力份额，称霸沧海。', 'gold');
 }
@@ -73,8 +78,11 @@ export function price(p, gid) {
   return Math.max(1, Math.round(G[gid].base * m));
 }
 export const dominated = zid => S.share[zid].player >= 50;
-export function buyPrice(p, gid) { let v = price(p, gid); if (dominated(p.zone)) v = Math.round(v * 0.92); if (S.captain === 'lin') v = Math.round(v * 0.95); return Math.max(1, v); }
-export function sellPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * 0.9)); }
+export function buyPrice(p, gid) {
+  const mult = Math.max(0.82, (dominated(p.zone) ? 0.92 : 1) * (S.captain === 'lin' ? 0.95 : 1) * repBuyMod(p));
+  return Math.max(1, Math.round(price(p, gid) * mult));
+}
+export function sellPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * 0.9 * repSellMod(p))); }
 export const SUPPLY_PRICE = 3;
 export function remember(pid) { const p = port(pid); const prices = {}; for (const g of GOODS) prices[g.id] = price(p, g.id); S.mem[pid] = { day: S.day, prices }; }
 
@@ -109,6 +117,7 @@ export function passDays(n, inPort = false) {
       if (S.supplies >= use) S.supplies -= use;
       else { S.supplies = 0; starved = true; for (const sh of S.fleet) sh.crew = Math.max(1, sh.crew - Math.ceil(sh.crew * 0.05)); }
     }
+    hooks.npcDay(1);
     if (S.day % 30 === 0) monthTick();
   }
   if (starved) log('补给耗尽，船员因饥渴不断减员！', 'bad');
@@ -120,9 +129,22 @@ export function monthTick() {
   S.gold += income;
   for (const r of RIVALS) { const zid = Math.random() < 0.45 ? r.home : pick(ZONES).id; transferShare(zid, r.id, rand(0.8, 2.6)); }
   for (const p of PORTS) for (const g of GOODS) { S.drift[p.id][g.id] = clamp(S.drift[p.id][g.id] * rand(0.92, 1.08), 0.75, 1.3); S.stock[p.id][g.id] *= 0.65; }
+  ensureRep();
+  for (const k of REP_KEYS) { const v = S.rep[k] || 0; S.rep[k] = Math.abs(v) < 1 ? 0 : Math.round(v - Math.sign(v) * Math.max(0.5, Math.abs(v) * 0.03)); }
   log(`月结：支付船员薪酬 ${fmt(wages)}${income ? `，海域主导收益 +${fmt(income)}` : ''}。`, income ? 'good' : '');
   if (S.gold < -5000) { for (const sh of S.fleet) sh.crew = Math.max(1, Math.floor(sh.crew * 0.8)); log('商会严重负债，大量船员弃船而去！', 'bad'); }
 }
+
+/* ========= 声望 ========= */
+const REP_KEYS = ['whale', 'redsail', 'goldsand', 'pirate', 'free'];
+export function ensureRep() { if (!S.rep) S.rep = { whale: 0, redsail: 0, goldsand: 0, pirate: 0, free: 10 }; return S.rep; }
+export function rep(f) { ensureRep(); return S.rep[f] ?? 0; }
+export function addRep(f, v) { ensureRep(); if (!(f in S.rep)) return; S.rep[f] = clamp(Math.round(S.rep[f] + v), -100, 100); }
+export function repLabel(v) { return v >= 60 ? '盟友' : v >= 25 ? '友好' : v >= -10 ? '中立' : v >= -45 ? '冷淡' : v >= -75 ? '敌视' : '死敌'; }
+/** 声望对进货价的影响（±6%） */
+export function repBuyMod(p) { const f = zoneLeader(p.zone); if (f === 'player' || !S.rep || !(f in S.rep)) return 1; return 1 - clamp(S.rep[f], -60, 60) / 1000; }
+/** 声望对卖出价的影响（±5%） */
+export function repSellMod(p) { const f = zoneLeader(p.zone); if (f === 'player' || !S.rep || !(f in S.rep)) return 1; return 1 + clamp(S.rep[f], -60, 60) / 1200; }
 
 /* ========= 天气 ========= */
 export const WEATHER_ICON = { clear: '☀', rain: '🌧', storm: '⛈' };
@@ -148,7 +170,9 @@ export const dailySupply = () => Math.max(1, Math.ceil(totalCrew() / 20));
 /** 1 天航程对应的逻辑距离 */
 /** 1 天航程对应的逻辑距离（真实世界比例下，横渡大西洋约 20 天） */
 export const dayDistance = () => fleetSpeed() * 8;
-export function voyageDays(pid) { const b = port(pid); return Math.max(1, Math.ceil(Math.hypot(S.ship.x - projX(b.lon), S.ship.y - projY(b.lat)) / dayDistance())); }
+/** 全局唯一的航程天数来源：用实际绕行航线长度，而不是直线 */
+export function voyageDays(pid) { return Math.max(1, Math.ceil(hooks.routeLen(pid) / dayDistance())); }
+export function voyageLeft() { const v = S.voyage; return v ? Math.max(1, Math.ceil((v.total - v.traveled) / dayDistance())) : 0; }
 export function portKm(pid) { const b = port(pid); return greatCircleKm(b.lon, b.lat, port(S.pos).lon, port(S.pos).lat); }
 export function crewShortage() { return S.fleet.filter(sh => sh.crew < Math.ceil(T(sh).crew * 0.2)); }
 
@@ -326,11 +350,43 @@ export function save(silent) {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(S, (k, v) => typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 1000) / 1000 : v)); if (!silent) hooks.toast('已保存'); }
   catch (e) { if (!silent) hooks.toast('保存失败：浏览器存储不可用'); }
 }
+/** 幂等地补齐新增字段：load 与 newGame 都会调用 */
+export function migrate() {
+  if (!S) return;
+  S.ver = 3;
+  S.stats = S.stats || { trades: 0, battles: 0, wins: 0 };
+  S.captain = S.captain || 'lin';
+  S.weather = S.weather || { type: 'clear', days: 0 };
+  S.ct = S.ct || { active: [], done: 0, failed: 0 };
+  ensureRep();
+  for (const k of REP_KEYS) if (typeof S.rep[k] !== 'number') S.rep[k] = 0;
+  delete S.escortUntil;
+  for (const p of PORTS) {
+    S.drift[p.id] = S.drift[p.id] || {}; S.stock[p.id] = S.stock[p.id] || {};
+    if (S.dev[p.id] == null) S.dev[p.id] = 0;
+    for (const gd of GOODS) {
+      if (S.drift[p.id][gd.id] == null) S.drift[p.id][gd.id] = rand(0.85, 1.15);
+      if (S.stock[p.id][gd.id] == null) S.stock[p.id][gd.id] = 0;
+    }
+  }
+  for (const z of ZONES) if (!S.share[z.id]) S.share[z.id] = { player: 0, whale: 34, redsail: 33, goldsand: 33 };
+  if (!port(S.pos)) { S.pos = START_PORT; S.ship = { x: projX(port(START_PORT).lon), y: projY(port(START_PORT).lat) }; S.dest = null; S.voyage = null; }
+}
+
 export function load(silent) {
   try {
-    const raw = localStorage.getItem(SAVE_KEY); if (!raw) { if (!silent) hooks.toast('没有存档'); return false; }
-    const d = JSON.parse(raw); if (!d || !d.fleet || !d.share || !d.ship) { if (!silent) hooks.toast('存档损坏'); return false; }
-    S = d; S.stats = S.stats || { trades: 0, battles: 0, wins: 0 }; if (!S.captain) S.captain = 'lin'; if (!S.weather) S.weather = { type: 'clear', days: 0 };
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) {
+      // 旧版本存档的港口 id 与坐标系已失效，不再兼容
+      if (OLD_SAVE_KEYS.some(k => localStorage.getItem(k))) {
+        for (const k of OLD_SAVE_KEYS) localStorage.removeItem(k);
+        if (!silent) hooks.toast('旧版存档与新的真实世界地图不兼容，已开启新航程');
+      } else if (!silent) hooks.toast('没有存档');
+      return false;
+    }
+    const d = JSON.parse(raw);
+    if (!d || !d.fleet || !d.share || !d.ship) { if (!silent) hooks.toast('存档损坏'); return false; }
+    S = d; migrate();
     if (!silent) { hooks.toast('已读取存档'); hooks.render(); }
     return true;
   } catch (e) { if (!silent) hooks.toast('读取失败'); return false; }

@@ -2,7 +2,7 @@
    以及遭遇时的多选项互动与声望系统。NPC 本身不写入存档，读档时重新生成。 */
 import { Container, Sprite, Graphics, Text } from 'pixi.js';
 import { PORTS, ZONES, GOODS, G, FACTION_COLOR, FACTION_NAME, RIVALS, SHIP_TYPES } from './data.js';
-import { S, port, zone, zoneLeader, price, fleetValue, totalCrew } from './game.js';
+import { S, port, zone, zoneLeader, price, fleetValue, totalCrew, rep, addRep, dayDistance } from './game.js';
 import { projX, projY } from './geo.js';
 import { findPath, snapToWater, NAV } from './nav.js';
 import { clamp, pick, rand, randInt, hash } from './util.js';
@@ -17,23 +17,8 @@ const POOL = 46;               // 全球同时存在的 NPC 船队数
 const HAIL_R = 26;             // 可招呼距离（逻辑单位）
 const PIRATE_AGGRO = 60;       // 海盗察觉半径
 
-/* ---------- 声望 ---------- */
-export function ensureRep() { if (!S.rep) S.rep = { whale: 0, redsail: 0, goldsand: 0, pirate: 0, free: 10 }; return S.rep; }
-export function rep(f) { ensureRep(); return S.rep[f] ?? 0; }
-export function addRep(f, v) {
-  ensureRep(); if (!(f in S.rep)) return;
-  S.rep[f] = clamp(Math.round(S.rep[f] + v), -100, 100);
-}
-export function repLabel(v) {
-  return v >= 60 ? '盟友' : v >= 25 ? '友好' : v >= -10 ? '中立' : v >= -45 ? '冷淡' : v >= -75 ? '敌视' : '死敌';
-}
-/** 声望对该势力所属海域港口价格的影响（-4% ~ +6%） */
-export function repPriceMod(zid) {
-  const leader = zoneLeader(zid);
-  if (leader === 'player' || !(leader in (S.rep || {}))) return 1;
-  const r = rep(leader);
-  return 1 - clamp(r, -60, 60) / 1000;
-}
+/* ---------- 声望（实现在 game.js，这里转出以保持调用点不变） ---------- */
+export { rep, addRep, repLabel, ensureRep } from './game.js';
 
 /* ---------- 生成 ---------- */
 const KINDS = [
@@ -89,6 +74,35 @@ export class NpcFleet {
     for (let i = 0; i < POOL; i++) { const z = pick(ZONES); const n = makeNpc(z.id); if (n) this.list.push(n); }
   }
   setScale(k) { this.k = k; for (const [, v] of this.views) v.c.scale.set(k); }
+
+  /** 按游戏日推进：玩家在港口停泊或剧情跳天时，海上世界照样在走 */
+  day(days = 1) {
+    if (!S) return;
+    for (let i = 0; i < 6; i++) this.pumpQueue();          // 让停泊期间也能算出航线
+    const px = S.ship.x, py = S.ship.y, dd = dayDistance();
+    for (const n of this.list) {
+      n.cooldown = Math.max(0, n.cooldown - days * 6);
+      n.life -= days * 6;
+      if (!n.path && !n.pending) { this.assign(n); continue; }
+      if (Math.hypot(n.x - px, n.y - py) < 260) continue;   // 近场由逐帧推进负责
+      if (!n.path || n.pending) continue;
+      let budget = (n.speed / 30) * dd * days;
+      while (budget > 0 && n.leg < n.path.length) {
+        const t = n.path[n.leg]; const dx = t.x - n.x, dy = t.y - n.y, d = Math.hypot(dx, dy);
+        if (d < 1) { n.leg++; continue; }
+        const step = Math.min(d, budget);
+        n.x += dx / d * step; n.y += dy / d * step; n.heading = Math.atan2(dy, dx); budget -= step;
+      }
+      if (n.leg >= n.path.length) { n.from = n.to; n.to = null; n.path = null; }
+    }
+  }
+  /** 被击沉 / 被俘后从世界上移除 */
+  remove(id) {
+    const i = this.list.findIndex(n => n.id === id); if (i < 0) return;
+    this.list.splice(i, 1);
+    const v = this.views.get(id); if (v) { v.c.visible = false; this.views.delete(id); this.free.push(v); }
+    const z = pick(ZONES); const fresh = makeNpc(z.id); if (fresh) this.list.push(fresh);
+  }
 
   /* ---- 航线（分帧计算，避免卡顿） ---- */
   assign(n) {

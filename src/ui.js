@@ -14,7 +14,6 @@ import * as geo from './geo.js';
 import { audio } from './audio.js';
 
 let map = null;
-let pending = null;      // 遭遇对手商会时的待决状态
 let eventCb = null;
 
 /* ========= 基础弹窗 ========= */
@@ -361,7 +360,7 @@ export function resetGoldTween() { lastGold = null; }
 function renderTop() {
   const p = port(S.pos); const cap = captain();
   const wi = g.WEATHER_ICON[S.weather?.type || 'clear'];
-  const status = S.dest ? `航行中 → <b>${port(S.dest).name}</b>（第 ${S.voyage.days + 1} 天，约剩 ${g.voyageDays(S.dest)} 天）${wi}` : `停泊 <b>${p.name}</b>（${zone(p.zone).name}）${wi}`;
+  const status = S.dest ? `航行中 → <b>${port(S.dest).name}</b>（第 ${S.voyage.days + 1} 天，约剩 ${g.voyageLeft()} 天）${wi}` : `停泊 <b>${p.name}</b>（${zone(p.zone).name}）${wi}`;
   document.getElementById('top').innerHTML = `<span class="title">沧海纪</span>
     <span class="cap">${portrait(cap, 28)}<b>${cap.name}</b></span>
     <span class="stat">金币 <b id="goldv" class="${S.gold < 0 ? 'bad' : 'gold'}">${fmt(S.gold)}</b></span>
@@ -394,7 +393,7 @@ function renderPanel() {
 function renderAtSea() {
   const to = port(S.dest); const v = S.voyage;
   return `<h2>航行中</h2>${npcCard('ahai', pick(['风向不错，保持航向！', '瞭望手说前方海面平静。', '船长，补给还够撑几天，别绕远路。', '再点一个港口就能改航向，随你吩咐。']))}
-    <div class="card"><b>目的地</b> ${to.name}（${zone(to.zone).name}）<br><span class="muted">已航行 ${v.days} 天 · 约剩 ${g.voyageDays(S.dest)} 天 · 特产：${to.produce.map(x => G[x].name).join('、')} · 紧缺：${to.demand.map(x => G[x].name).join('、')}</span></div>
+    <div class="card"><b>目的地</b> ${to.name}（${zone(to.zone).name}）<br><span class="muted">已航行 ${v.days} 天 · 约剩 ${g.voyageLeft()} 天 · 特产：${to.produce.map(x => G[x].name).join('、')} · 紧缺：${to.demand.map(x => G[x].name).join('、')}</span></div>
     <div class="card"><b>镜头与速度</b><div class="row" style="margin-top:6px"><button class="btn" data-a="recenter">⌖ 回到船队</button><button class="btn" data-a="speed">${map.speedMul === 1 ? '▶ 快进 3×' : '▶ 恢复 1×'}</button></div><p class="muted" style="font-size:12px">拖动海图可以查看远处；点击其他港口可改变航向。港口操作要等抵港后进行。</p></div>`;
 }
 function renderPort() {
@@ -490,7 +489,8 @@ function renderShare() {
     return `<div style="margin:4px 0"><span style="font-size:12px">${N.FACTION_LABEL[f]} <span class="muted">${N.repLabel(v)}（${v > 0 ? '+' : ''}${v}）</span></span>
       <div class="bar"><i style="width:${w}%;background:${v >= 25 ? 'var(--good)' : v <= -25 ? 'var(--bad)' : 'var(--gold2)'}"></i></div></div>`; }).join('');
   return `<h2>势力版图</h2><p class="muted" style="font-size:12px">已主导 <b class="gold">${won}/${VICTORY_ZONES}</b>（全图 ${ZONES.length} 个海域） · 每月主导收益 ${fmt(income)} 金币</p>${zones}
-    <h3>声望</h3><div class="card">${reps}<p class="muted" style="font-size:11px;margin-top:6px">在海上与各方打交道会改变关系。关系好可享进货折扣、遭遇时更多选项；关系差会被主动攻击。</p></div>${'' /* */}
+    <h3>声望</h3><div class="card">${reps}<p class="muted" style="font-size:11px;margin-top:6px">本港进货价因声望 ${((g.repBuyMod(port(S.pos)) - 1) * 100).toFixed(1)}%，卖出价 ${((g.repSellMod(port(S.pos)) - 1) * 100).toFixed(1)}%。<br>
+      声望不等于份额：份额是地盘（决定胜负），声望是态度（决定价格与海上待遇）。武力夺份额必然压低声望。关系每月会向 0 回归一点。</p></div>${'' /* */}
     <h3>对手商会</h3>${RIVALS.map(r => { const rep = CHARS[RIVAL_REP[r.id]]; return `<div class="npc">${portrait(rep, 48)}<div><b style="color:${r.color}">${r.name}</b> <span class="muted">${rep.name} · ${rep.title}</span><div class="muted" style="font-size:12px">大本营 ${zone(r.home).name}，每月会在各海域扩张，尤其巩固大本营。</div></div></div>`; }).join('')}`;
 }
 function renderJournal() {
@@ -554,7 +554,7 @@ export const ACTIONS = {
       const kind = n.faction === 'pirate' || n.faction === 'free' ? 'pirate' : 'rival';
       closeModal();
       g.startBattle(kind, kind === 'rival' ? n.faction : null, fleet, zid, () => {});
-      B.npc = { faction: n.faction, kind: n.kind, zone: zid };
+      B.npc = { faction: n.faction, kind: n.kind, zone: zid, id: n.id };
       n.cooldown = 600; enc = null; hooks.renderBattle(); return;
     }
     if (r.trade) { encTrade(r.trade); return; }
@@ -578,20 +578,23 @@ export const ACTIONS = {
   dlgAccept: () => { const d = dlg; endDlg(); if (d?.opts.accept?.onAccept) d.opts.accept.onAccept(); render(); },
   dlgDecline: () => { const d = dlg; endDlg(); if (d?.opts.accept?.onDecline) d.opts.accept.onDecline(); render(); },
   eventOk: () => { const cb = eventCb; eventCb = null; closeModal(); render(); if (cb) cb(); },
-  attackRival: d => { const pd = pending; pending = null; g.startBattle('rival', d.rid, pd.enemy, pd.zone, pd.done); },
-  avoidRival: () => { const pd = pending; pending = null; closeModal(); g.log('你调整航向，避开了对手的船队。'); pd.done(0); },
   bsel: d => map.battle.select(+d.i), bfire: () => map.battle.act('fire'),
   bfireAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('fire', u); },
   bboardAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('board', u); }, bboard: () => map.battle.act('board'), bcancel: () => map.battle.act('cancel'),
   bwait: () => map.battle.act('wait'), bend: () => map.battle.act('endTurn'), bflee: () => map.battle.act('flee'),
   battleDone: () => { const info = B ? { won: B.result === 'win', kind: B.kind, rivalId: B.rivalId, boss: B.boss, npc: B.npc } : null; const cb = g.clearBattle(); map.battle.end(); closeModal(); map.setMode(S.dest ? 'sea' : 'port'); if (info && info.won) { Q.questEvent('battleWin', info); C.contractEvent('battleWin', info); }
-    if (info && info.npc) { N.addRep(info.npc.faction, info.won ? -22 : -8); if (info.npc.faction !== 'pirate') N.addRep('pirate', 4); }
+    if (info && info.npc) {
+      N.addRep(info.npc.faction, info.won ? -22 : -8);
+      if (info.npc.faction !== 'pirate') N.addRep('pirate', 4);
+      if (info.won && info.npc.id) map.npc.remove(info.npc.id);
+    }
     render(); if (cb) cb(0); },
 };
 
 export function initUI(worldMap) {
   map = worldMap;
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
+    routeLen: pid => map.routeLen(pid), npcDay: d => map.npc.day(d),
     onEvent: Q.questEvent, showDialogue, hoverPort: showPortTip,
     questPorts: () => { const s = Q.questPorts(); for (const c of C.activeContracts()) s.add(c.to); return s; },
     portMarkers: pid => { const m = Q.portMarkers(pid); const fresh = C.boardFor(pid).some(c => !C.isTaken(c.id)); if (fresh && !m.office) m.office = '!'; return m; },

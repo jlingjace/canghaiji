@@ -8,7 +8,7 @@ import { initMenuKeys } from './fx.js';
 
 const map = new WorldMap();
 let fresh = false;
-if (!(hasSave() && load(true))) { newGame(); fresh = true; }
+if (!(hasSave() && load(true))) { load(true); newGame(); fresh = true; }   // load 顺带清理不兼容的旧存档
 await map.init(document.getElementById('mapwrap'));
 initUI(map);
 initMenuKeys(i => { game.S.tab = TABS[i][0]; render(); });

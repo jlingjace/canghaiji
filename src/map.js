@@ -177,6 +177,16 @@ export class WorldMap {
   }
 
   /* ----- 航行（沿寻路航线） ----- */
+  /** 真实绕行航程长度（带缓存），供 game.voyageDays 使用 */
+  routeLen(pid) {
+    if (!this.routeCache) this.routeCache = new Map();
+    const key = `${pid}|${Math.round(S.ship.x / 16)}|${Math.round(S.ship.y / 16)}`;
+    if (this.routeCache.has(key)) return this.routeCache.get(key);
+    const len = this.planRoute(pid).length;
+    if (this.routeCache.size > 120) this.routeCache.clear();
+    this.routeCache.set(key, len);
+    return len;
+  }
   planRoute(pid) {
     const to = port(pid);
     const from = { x: S.ship.x, y: S.ship.y };
