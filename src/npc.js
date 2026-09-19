@@ -232,6 +232,8 @@ export function npcDesc(n) {
 export const supplyUnit = n => n.kind === 'fisher' ? 6 : 9;
 /** 对方船上能匀出来的补给量 */
 export const supplyStock = n => Math.max(10, Math.round(n.ships * (n.kind === 'fisher' ? 40 : 25)));
+/** 买路钱开价：首次算出后钉在这支船队上，UI 门槛与结算才会是同一个数 */
+export const bribeCost = n => (n.bribeCost ??= Math.round(200 + n.strength * rand(8, 16)));
 const myPower = () => fleetValue() / 900 + totalCrew() / 20;
 /** 实力对比：>1.4 压制，0.7~1.4 相当，<0.7 劣势 */
 export const powerRatio = n => myPower() / Math.max(6, n.strength);
@@ -264,7 +266,10 @@ export function encounterOptions(n, mode) {
   if (n.kind === 'escort' && n.faction !== 'pirate') out.push({ id: 'hire', kind: 'hire', label: '雇佣护航（600 金币）', hint: S.gold < 600 ? '金币不足 600' : '本次航程内海盗不会主动袭击', disabled: S.gold < 600 });
   if (mine && n.faction !== 'free' && n.kind !== 'raider') out.push({ id: 'toll', kind: 'demand', label: '索要通行费', hint: '你主导本海域；对方可能照付，也可能翻脸' });
   if (pr > 1.5 && n.kind !== 'fisher') out.push({ id: 'intimidate', kind: 'demand', label: '威慑劝降', hint: '实力碾压时可不战而取其货物，但名声受损' });
-  if (mode === 'ambush' || n.kind === 'raider') out.push({ id: 'bribe', kind: 'pay', label: '交买路钱', hint: S.gold < 300 ? '金币不足，凑不出买路钱' : '花钱脱身，避免一场恶战', disabled: S.gold < 300 });
+  if (mode === 'ambush' || n.kind === 'raider') {
+    const cost = bribeCost(n);                       // 用真实开价做门槛，不能写死 300（实际最低 312）
+    out.push({ id: 'bribe', kind: 'pay', label: `交买路钱（${cost} 金币）`, hint: S.gold < cost ? `对方开价 ${cost}，你凑不出来` : '花钱脱身，避免一场恶战', disabled: S.gold < cost });
+  }
   if (pr <= 1.5 && n.kind !== 'fisher') out.push({ id: 'intimidate', kind: 'demand', label: '威慑劝降', hint: '需要实力明显压制对方（提升船队规模与火炮）', disabled: true });
   if (!mine && n.faction !== 'free' && n.kind !== 'raider') out.push({ id: 'toll', kind: 'demand', label: '索要通行费', hint: `需要你在${zone(zid).name}的份额过半`, disabled: true });
   out.push({ id: 'fight', kind: 'fight', label: '发动攻击', hint: n.kind === 'raider' ? '击沉海盗可获战利品' : '击败商会船队可夺取其海域份额，但关系会严重恶化' });
@@ -371,8 +376,8 @@ export function resolveOption(n, id, qty = 0) {
       return R;
     }
     case 'bribe': {
-      const cost = Math.round(200 + n.strength * rand(8, 16));
-      if (S.gold < cost) { R.text = `对方开价 ${cost} 金币，你付不起。`; return R; }
+      const cost = bribeCost(n);
+      if (S.gold < cost) { R.text = `对方开价 ${cost} 金币，你付不起——对方看出你身上没钱，直接扑了上来。`; R.battle = true; return R; }
       S.gold -= cost; addRep('pirate', 6); n.cooldown = 300; n.chasing = false;
       R.text = `你丢过去一袋 ${cost} 金币。“识相。”对方调转船头走了。`;
       return R;

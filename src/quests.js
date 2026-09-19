@@ -1,5 +1,5 @@
 /* 任务引擎：前置 / 接取 / 目标追踪 / 交付 / 奖励 / 剧情对话队列。内容数据在 story.js */
-import { S, B, hooks, port, zone, log, transferShare, mkShip, nextShipName, checkWin, captain, makeEnemy, startBattle, T } from './game.js';
+import { S, B, hooks, port, zone, log, transferShare, mkShip, nextShipName, checkWin, captain, makeEnemy, startBattle, T , sellable } from './game.js';
 import { STORY } from './story.js';
 import { CHARS, SHIP_TYPES, G, PORTS } from './data.js';
 import { fmt, clamp, rand } from './util.js';
@@ -95,7 +95,8 @@ export function questEvent(type, d = {}) {
         case 'arrive':
           if (o.kind === 'visit' && o.port === d.pid) bump(q, i, 1, true);
           if (o.kind === 'visitZone' && port(d.pid).zone === o.zone) bump(q, i, 1, true);
-          if (o.kind === 'deliver' && o.port === d.pid && (S.cargo[o.good] || 0) >= o.qty) { S.cargo[o.good] -= o.qty; if (S.cargo[o.good] <= 0) delete S.cargo[o.good]; bump(q, i, o.qty, true); log(`交付 ${G[o.good].name} ×${o.qty}。`, 'good'); }
+          // 只能动「可支配」的货：运货委托托运的那部分不属于玩家，吃掉它会让那张委托必然违约
+          if (o.kind === 'deliver' && o.port === d.pid && sellable(o.good) >= o.qty) { S.cargo[o.good] -= o.qty; if (S.cargo[o.good] <= 0) delete S.cargo[o.good]; bump(q, i, o.qty, true); log(`交付 ${G[o.good].name} ×${o.qty}。`, 'good'); }
           break;
         case 'sell':
           if (o.kind === 'sell' && o.good === d.gid && (!o.port || o.port === d.pid) && (!o.zone || port(d.pid).zone === o.zone)) bump(q, i, d.qty);

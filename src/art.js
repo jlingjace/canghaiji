@@ -97,7 +97,7 @@ export function distanceField(mask, w, h, want, maxD = 64) {
     const nq = [];
     for (const i of q) {
       const x = i % w, y = (i - x) / w;
-      for (let k = 0; k < 8; k++) {
+      for (let k = 0; k < 9; k++) {           // 必须到 9：k=8 是 (+1,+1)，写成 <8 会让右下方向的距离偏大一倍
         const nx = x + (k % 3) - 1, ny = y + ((k / 3) | 0) - 1;
         if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
         const j = ny * w + nx;

@@ -11,6 +11,9 @@ const STRAITS = [
   [11.0, 56.2, 0.7],     // 大贝尔特 / 厄勒（丹麦海峡）
   [12.8, 55.8, 0.5],
   [26.2, 40.3, 0.45],    // 达达尼尔
+  [26.7, 40.5, 0.45],    // 马尔马拉海西口
+  [27.6, 40.7, 0.5],     // 马尔马拉海中段
+  [28.4, 40.9, 0.45],    // 马尔马拉海东口
   [29.0, 41.1, 0.45],    // 博斯普鲁斯
   [15.3, 38.2, 0.35],    // 墨西拿
   [43.4, 12.6, 0.5],     // 曼德海峡
@@ -45,7 +48,8 @@ export function buildMask() {
   for (let i = 0; i < NC * NR; i++) mask[i] = data[i * 4 + 3] > 80 ? 1 : 0;
   // 强制打通关键海峡
   for (const [lon, lat, rDeg] of STRAITS) {
-    const cx = projX(lon) / NAV, cy = projY(lat) / NAV, rr = Math.max(1, rDeg * 12 / NAV);
+    // 至少凿开 2 格宽：findPath 不走对角缝，1 格宽的水道等于没通
+    const cx = projX(lon) / NAV, cy = projY(lat) / NAV, rr = Math.max(2, rDeg * 12 / NAV);
     for (let r = Math.floor(cy - rr); r <= Math.ceil(cy + rr); r++)
       for (let c = Math.floor(cx - rr); c <= Math.ceil(cx + rr); c++) {
         if (c < 0 || r < 0 || c >= NC || r >= NR) continue;
@@ -144,12 +148,16 @@ const DIRS = [[1, 0, 1], [-1, 0, 1], [0, 1, 1], [0, -1, 1], [1, 1, 1.4142], [1, 
  * 海上寻路：返回逻辑坐标航点数组（含终点，不含起点）；找不到路时返回直线终点。
  * 航线会避开陆地，并轻微偏好离岸水域。
  */
+/** 最近一次 findPath 有没有真的找到海路。false 表示返回的是穿陆地的直线兜底。 */
+export let lastPathOk = true;
 export function findPath(from, to) {
   buildMask();
+  lastPathOk = true;
   if (seaLine(from.x, from.y, to.x, to.y)) return [{ x: to.x, y: to.y }];
   const s = snapToWater(from.x, from.y), g = snapToWater(to.x, to.y);
   const start = idx(s.c, s.r), goal = idx(g.c, g.r);
   if (start === goal) return [{ x: to.x, y: to.y }];
+  const fail = () => { lastPathOk = false; return [{ x: to.x, y: to.y }]; };
   const gScore = new Float32Array(NC * NR).fill(Infinity);
   const prev = new Int32Array(NC * NR).fill(-1);
   const closed = new Uint8Array(NC * NR);
@@ -173,7 +181,7 @@ export function findPath(from, to) {
       if (ng < gScore[ni]) { gScore[ni] = ng; prev[ni] = cur; open.push(ni, ng + h(nc, nr)); }
     }
   }
-  if (!found) return [{ x: to.x, y: to.y }];
+  if (!found) return fail();
   const cells = [];
   for (let cur = goal; cur !== -1; cur = prev[cur]) { const c = cur % NC; cells.push(cellCenter(c, (cur - c) / NC)); if (cur === start) break; }
   cells.reverse();
@@ -188,6 +196,37 @@ export function findPath(from, to) {
   }
   if (out[out.length - 1] !== cells[cells.length - 1]) out.push(cells[cells.length - 1]);
   return out;
+}
+
+/**
+ * 水域连通分量自检：返回 {components, ports:{id:compIndex}}，供 verify 用。
+ * 伊斯坦布尔那次就是被栅格封成了 405 格的孤岛，而寻路失败是静默的，所以必须有这道检查。
+ */
+export function waterComponents(portList) {
+  buildMask();
+  const comp = new Int32Array(NC * NR).fill(-1);
+  let n = 0;
+  for (let i = 0; i < NC * NR; i++) {
+    if (mask[i] || comp[i] !== -1) continue;
+    const stack = [i]; comp[i] = n;
+    while (stack.length) {
+      const cur = stack.pop(), cc = cur % NC, cr = (cur - cc) / NC;
+      for (const [dc, dr, w] of DIRS) {
+        const nc = cc + dc, nr = cr + dr;
+        if (nc < 0 || nr < 0 || nc >= NC || nr >= NR) continue;
+        const ni = idx(nc, nr);
+        if (mask[ni] || comp[ni] !== -1) continue;
+        if (w > 1 && (mask[idx(cc + dc, cr)] || mask[idx(cc, cr + dr)])) continue;   // 与 findPath 同样不穿对角缝
+        comp[ni] = n; stack.push(ni);
+      }
+    }
+    n++;
+  }
+  const sizes = new Array(n).fill(0);
+  for (let i = 0; i < NC * NR; i++) if (comp[i] >= 0) sizes[comp[i]]++;
+  const ports = {};
+  for (const p of portList) { const { c, r } = snapToWater(projX(p.lon), projY(p.lat)); ports[p.id] = comp[idx(c, r)]; }
+  return { count: n, sizes, ports };
 }
 
 /** 航线总长度（逻辑单位） */

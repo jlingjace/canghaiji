@@ -1,6 +1,6 @@
 /* 六角格海战场景：格子 / 单位 / 玩家操作 / 敌方 AI / 特效动画 */
 import { Container, Sprite, TilingSprite, Graphics, Text } from 'pixi.js';
-import { S, B, hooks, T, fleeChance, blog, endBattle, alive, fireAt, boardAt, rival } from './game.js';
+import { S, B, hooks, T, fleeChance, fleeChanceAt, blog, endBattle, alive, fireAt, boardAt, rival } from './game.js';
 import { SHIP_TYPES, CHARS, RIVAL_REP } from './data.js';
 import { clamp, pick, rand } from './util.js';
 import { audio } from './audio.js';
@@ -137,7 +137,7 @@ export class BattleScene {
     if (a === 'endTurn') { for (const u of this.aliveUnits('p')) { u.acted = true; u.moved = true; } this.afterAction(); return; }
     if (a === 'flee') {
       const minD = Math.min(...this.aliveUnits('e').map(e => Math.min(...this.aliveUnits('p').map(p => hexDist(p, e)))));
-      const chance = clamp(fleeChance() + Math.max(0, minD - 3) * 0.1, 0.1, 0.95);
+      const chance = fleeChanceAt(minD);      // 与 HUD 共用同一个公式
       if (Math.random() < chance) { blog('船队成功脱离战斗！', 'good'); endBattle('flee'); this.refresh(); return; }
       blog('撤退失败，敌军追了上来！', 'bad'); for (const u of this.aliveUnits('p')) { u.acted = true; u.moved = true; } this.afterAction(); return;
     }

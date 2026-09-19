@@ -108,6 +108,20 @@ export class PortScene {
   }
 
   /**
+   * 回收 build() 自己造出来的贴图。
+   * 不能一刀切 destroy({texture:true})——场景里混着共享贴图（bgTex / shipTex / pedTex / gullTex / cloudTex），
+   * 那样会把它们一起销毁。这里只点名回收每次重建都新造的那几张。
+   */
+  releaseOwned() {
+    const kill = t => { try { t && !t.destroyed && t.destroy(true); } catch (e) {} };
+    kill(this.bg && this.bg.texture);
+    kill(this.props && this.props.texture);
+    (this.foamTex || []).forEach(kill);
+    (this.flagTex || []).forEach(kill);
+    this.bg = null; this.props = null; this.foamTex = null; this.flagTex = null;
+  }
+
+  /**
    * 码头道具层：同一海域的三到六个港共用一张手绘底图，靠这一层区分彼此。
    *
    * 教训：一开始画了一堆小道具（吊架、手推车、系缆桩），在手绘底图上完全读不出来——
@@ -186,16 +200,20 @@ export class PortScene {
     const iw = tex.width, ih = tex.height;
     const sc = Math.max(vw / iw, vh / ih);
     const dw = iw * sc, dh = ih * sc;
-    const ox = (vw - dw) / 2, oy = vh - dh;      // 底部对齐：码头与水面一定在画面里
+    const ox = (vw - dw) / 2;
+    // 纵向：优先底部对齐（码头与水面一定在画面里），但不能让 art.top 这条线跑出画面上方——
+    // 素材是 1:1 的，画布一宽 dh 就远大于 vh，纯底部对齐会把屋顶连同名牌、任务标记一起顶出屏幕。
+    const oy = Math.min(0, Math.max(vh - dh, -dh * art.top + 4));
     const spr = new Sprite(tex); spr.position.set(ox, oy); spr.scale.set(sc);
     this.artLayer.addChild(spr);
     const toScene = f => (oy + dh * f) / K;
     const toSceneX = f => (ox + dw * f) / K;
+    const clampY = v => Math.max(2, Math.min(Math.round(vh / K) - 2, Math.round(v)));
     return {
       groundY: Math.round(toScene(art.ground)),
       walkY: Math.round(toScene(art.walk ?? (art.ground + (art.sea - art.ground) * 0.35))),
       seaY: Math.round(toScene(art.sea)),
-      topY: Math.round(toScene(art.top)),
+      topY: clampY(toScene(art.top)),                 // 再兜一层，换素材时不会重犯
       spots: art.spots.map(([a, b]) => [Math.round(toSceneX(a)), Math.round(toSceneX(b))]),
     };
   }
@@ -212,6 +230,7 @@ export class PortScene {
     const K = Math.max(2, Math.floor(Math.min(vw / BASE_W, vh / BASE_H)));
     this.K = K; const W = Math.ceil(vw / K), H = Math.ceil(vh / K);
     this.W = W; this.H = H;
+    this.releaseOwned();                              // 先回收上一轮自己造的贴图，再拆场景
     this.scene.removeChildren().forEach(c => c.destroy({ children: true }));
     this.labels.removeChildren().forEach(c => c.destroy({ children: true }));
     this.scene.scale.set(K);
@@ -715,7 +734,7 @@ export class PortScene {
   /* ---------- 每帧 ---------- */
   tick(dt) {
     if (!this.pid) return;
-    this.resizeT += dt; if (this.resizeT > 0.3) { this.resizeT = 0; this.show(this.pid); }
+    this.resizeT += dt; if (this.resizeT > 0.3) { this.resizeT = 0; this.show(S.pos); }   // 用 S.pos 而不是 this.pid，读档换港后能自愈
     this.t += dt; const W = this.W, t = this.t;
     for (const c of this.clouds) { c.x += c.vx * dt; if (c.x > W + 4) c.x = -20; }
     for (const g of this.gulls) { g.x += g.vx * dt; g.y = g.baseY + Math.sin(t * 2 + g.phase) * 3; g.texture = this.gullTex[Math.floor(t * 8 + g.phase) % 3]; if (g.x > W + 10) { g.x = -10; } if (g.x < -10) g.x = W + 10; }

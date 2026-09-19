@@ -9,12 +9,12 @@ import { PortScene } from './port.js';
 import { BattleScene } from './battle.js';
 import { NpcFleet } from './npc.js';
 import { MAP_W, MAP_H, projX, projY } from './geo.js';
-import { findPath, pathLength } from './nav.js';
+import { findPath, pathLength, waterComponents } from './nav.js';
 import { clamp } from './util.js';
 
 export const WS = 1;                       // 逻辑单位 → 世界像素
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
-export const ZOOM_MIN = 0.22, ZOOM_MAX = 4.0;
+export const ZOOM_MIN = 0.16, ZOOM_MAX = 4.0;   // 0.22 时 1/n 档位最低只到 0.25，窄画布装不下全图
 /** 渲染分辨率：跟上设备像素比，否则在 Retina 上整个画面会被浏览器拉伸 2× 再平滑 */
 export const RES = Math.min(2, Math.max(1, Math.round((typeof window !== 'undefined' && window.devicePixelRatio) || 1)));
 /**
@@ -22,9 +22,28 @@ export const RES = Math.min(2, Math.max(1, Math.round((typeof window !== 'undefi
  * 像素画在非整数倍下会出现忽宽忽窄的像素块，看起来就是锯齿与抖动；吸附之后完全消失。
  * ≥1 时按 1/RES 步进（RES=2 → 1.0 / 1.5 / 2.0…），<1 时按整数倍缩小（1/2、1/3…）。
  */
-export function snapZoom(z) {
-  if (z >= 1) return Math.max(1, Math.round(z * RES) / RES);
-  return 1 / Math.min(1 / ZOOM_MIN, Math.max(1, Math.round(1 / z)));
+const LEVELS = (() => {
+  const out = [];
+  for (let n = Math.ceil(1 / ZOOM_MIN); n >= 2; n--) out.push(1 / n);        // 缩小侧：1/n 整数倍下采样
+  for (let k = 0; 1 + k / RES <= ZOOM_MAX + 1e-6; k++) out.push(1 + k / RES); // 放大侧：1/RES 步进
+  return out.filter(v => v >= ZOOM_MIN - 1e-6).sort((a, b) => a - b);
+})();
+const nearestLevel = z => LEVELS.reduce((a, b) => Math.abs(b - z) < Math.abs(a - z) ? b : a, LEVELS[0]);
+export function snapZoom(z) { return nearestLevel(clamp(z, ZOOM_MIN, ZOOM_MAX)); }
+/** 只向下取的版本：给「全图」用，保证结果一定装得下 */
+export function snapZoomDown(z) {
+  const c = clamp(z, ZOOM_MIN, ZOOM_MAX);
+  for (let i = LEVELS.length - 1; i >= 0; i--) if (LEVELS[i] <= c + 1e-6) return LEVELS[i];
+  return LEVELS[0];
+}
+/** 朝 factor 的方向至少挪一档——否则每次只缩 1.4× 时会永远卡在同一档 */
+function stepLevel(from, factor) {
+  const target = nearestLevel(clamp(from * factor, ZOOM_MIN, ZOOM_MAX));
+  if (target !== from) return target;
+  const i = LEVELS.indexOf(from);
+  if (i < 0) return target;
+  const j = factor < 1 ? i - 1 : i + 1;
+  return LEVELS[Math.max(0, Math.min(LEVELS.length - 1, j))];
 }
 /* 航行视图：地图拉近，船按真实世界比例显示（不再是恒定屏幕尺寸的图标）。
    SHIP_W 是船在世界坐标里的尺寸系数，32px 贴图 × 0.78 ≈ 25 逻辑单位 ≈ 2 经纬度。 */
@@ -43,6 +62,23 @@ export class WorldMap {
     this.el = el; this.app = new Application();
     await this.app.init({ resizeTo: el, background: '#0a2438', antialias: true, resolution: RES, autoDensity: true, preference: 'webgl' });
     el.prepend(this.app.canvas);
+    // 顶栏是渲染之后才撑开的，而 Pixi 的 resizeTo 只在 window resize 时重新量容器，
+    // 不补这个观察器画布会一直比 #mapwrap 高一截（被 overflow:hidden 裁掉）。
+    if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => this.app.resize()).observe(el);
+    // 连通性自检：海峡开凿半径一改错就可能把某片海封成孤岛，而寻路失败是静默退化成直线的，
+    // 船队会直接穿过陆地。开发模式下把它喊出来，免得又要靠玩家发现。
+    if (import.meta.env && import.meta.env.DEV) {
+      try {
+        const wc = waterComponents(PORTS);
+        const tally = {};
+        for (const c of Object.values(wc.ports)) tally[c] = (tally[c] || 0) + 1;
+        const main = Object.entries(tally).sort((a, b) => b[1] - a[1])[0];
+        if (Object.keys(tally).length > 1) {
+          const bad = PORTS.filter(p => String(wc.ports[p.id]) !== main[0]).map(p => p.name);
+          console.warn(`[nav] ${bad.length} 个港口与主航道不连通，寻路会退化成穿陆地的直线：`, bad.join('、'));
+        }
+      } catch (e) { /* 自检失败不影响游戏 */ }
+    }
     this.world = new Container(); this.app.stage.addChild(this.world);
     this.world.scale.set(this.zoom);
 
@@ -139,7 +175,7 @@ export class WorldMap {
 
   /* ----- 缩放 ----- */
   zoomAt(sx, sy, factor) {
-    const z0 = this.zoom, z1 = snapZoom(clamp(z0 * factor, ZOOM_MIN, ZOOM_MAX));
+    const z0 = this.zoom, z1 = stepLevel(snapZoom(z0), factor);
     if (z1 === z0) return;
     const wx = (sx - this.world.x) / z0, wy = (sy - this.world.y) / z0;
     this.zoom = z1; this.world.scale.set(z1);
@@ -165,7 +201,7 @@ export class WorldMap {
   }
   fitWorld() {
     const vw = this.app.screen.width, vh = this.app.screen.height;
-    this.zoom = snapZoom(clamp(Math.min(vw / (MAP_W * WS), vh / (MAP_H * WS)), ZOOM_MIN * 0.5, ZOOM_MAX));
+    this.zoom = snapZoomDown(Math.min(vw / (MAP_W * WS), vh / (MAP_H * WS)));   // 向下取，保证真的装得下
     this.zoomTarget = null;
     this.world.scale.set(this.zoom); this.follow = false;
     this.world.position.set((vw - MAP_W * WS * this.zoom) / 2, (vh - MAP_H * WS * this.zoom) / 2);
@@ -282,6 +318,19 @@ export class WorldMap {
     const len = this.planRoute(pid).length;
     if (this.routeCache.size > 120) this.routeCache.clear();
     this.routeCache.set(key, len);
+    return len;
+  }
+  /** 任意两港之间的真实绕行航程，供委托板与 UI 估算共用；结果缓存，不重复跑 A* */
+  routeBetween(aid, bid) {
+    if (aid === bid) return 0;
+    if (!this.pairCache) this.pairCache = new Map();
+    const key = aid < bid ? `${aid}|${bid}` : `${bid}|${aid}`;
+    if (this.pairCache.has(key)) return this.pairCache.get(key);
+    const a = port(aid), b = port(bid);
+    if (!a || !b) return null;
+    const from = { x: projX(a.lon), y: projY(a.lat) }, dest = { x: projX(b.lon), y: projY(b.lat) };
+    const len = pathLength(from, findPath(from, dest));
+    this.pairCache.set(key, len);
     return len;
   }
   planRoute(pid) {

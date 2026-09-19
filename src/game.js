@@ -7,12 +7,18 @@ import { START_PORT, VICTORY_ZONES } from './data.js';
 export let S = null;   // 存档状态
 export let B = null;   // 战斗状态
 export const SAVE_KEY = 'aot-save-v3';
+/** 港口表指纹：数据集换了就让旧档走「不兼容」分支，省得每次记着手动升 SAVE_KEY */
+export const PORTS_SIG = (() => { let h = 7; for (const p of PORTS) for (const c of p.id) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h; })();
 export const OLD_SAVE_KEYS = ['aot-save-v2', 'aot-save'];
 export const hooks = {
   render() {}, renderTop() {}, showModal() {}, closeModal() {}, toast() {},
   renderBattle() {}, onArrive() {}, rollEvent() {}, openPortTab() {}, openSeaMap() {},
   onEvent() {}, showDialogue() {}, questPorts() { return new Set(); }, portMarkers() { return {}; },
   hoverPort() {}, npcDay() {}, dayTick() {},
+  /** 由表现层注入：两港之间的真实绕行航程（逻辑单位）。没注入时委托板退回直线估算。 */
+  routeBetween() { return null; },
+  /** 停泊时货物有变动就通知委托层复判（否则「已在交付港」的情况永远结算不了） */
+  onCargo() {},
   /** 由表现层注入：某港口的真实绕行航程长度（逻辑单位）。默认直线兜底。 */
   routeLen(pid) { const b = port(pid); return Math.hypot(S.ship.x - projX(b.lon), S.ship.y - projY(b.lat)); },
 };
@@ -110,9 +116,17 @@ export function quote(p, gid, qty, side) {
   qty = Math.max(0, Math.floor(qty));
   const s0 = clamp(S.stock[p.id][gid], STOCK_LO, STOCK_HI);
   if (!qty) return { qty: 0, unit: side === 'buy' ? buyPrice(p, gid) : sellPrice(p, gid), total: 0, from: s0, to: s0 };
-  const s1 = clamp(s0 + (side === 'buy' ? IMPACT : -IMPACT) * qty, STOCK_LO, STOCK_HI);
-  const unit = Math.max(1, Math.round(corePrice(p, gid) * stockMult((s0 + s1) / 2) * sideMult(p, side)));
-  return { qty, unit, total: unit * qty, from: s0, to: s1 };
+  const dir = side === 'buy' ? 1 : -1;
+  const s1 = clamp(s0 + dir * IMPACT * qty, STOCK_LO, STOCK_HI);
+  const core = corePrice(p, gid), sm = sideMult(p, side);
+  // 被市场深度吸收的量走中点价；超出 [LO,HI] 的那部分只能按边界价成交，
+  // 否则一旦打满区间，再大的单量都是同一个均价——等于价格冲击对巨舰失效。
+  const qAbsorbed = Math.min(qty, Math.abs(s1 - s0) / IMPACT);
+  const qOver = qty - qAbsorbed;
+  const midUnit = Math.max(1, Math.round(core * stockMult((s0 + s1) / 2) * sm));
+  const edgeUnit = Math.max(1, Math.round(core * stockMult(dir > 0 ? STOCK_HI : STOCK_LO) * sm));
+  const total = Math.round(midUnit * qAbsorbed + edgeUnit * qOver);
+  return { qty, unit: Math.max(1, Math.round(total / qty)), total, from: s0, to: s1 };
 }
 /** 在预算与舱位内最多能买几件（均价随量上涨，只能二分） */
 export function maxAffordable(p, gid, gold, space) {
@@ -172,7 +186,7 @@ export function passDays(n, inPort = false) {
         if (S.hunger <= HUNGER_GRACE) halfRation++;
         else {
           const rate = Math.min(0.08, 0.02 + (S.hunger - HUNGER_GRACE) * 0.01);
-          for (const sh of S.fleet) sh.crew = Math.max(1, sh.crew - Math.ceil(sh.crew * rate));
+          for (const sh of S.fleet) sh.crew = Math.max(crewFloor(sh), sh.crew - Math.ceil(sh.crew * rate));
           starved++;
         }
       }
@@ -194,7 +208,7 @@ export function monthTick() {
   ensureRep();
   for (const k of REP_KEYS) { const v = S.rep[k] || 0; S.rep[k] = Math.abs(v) < 1 ? 0 : Math.round(v - Math.sign(v) * Math.max(0.5, Math.abs(v) * 0.03)); }
   log(`月结：支付船员薪酬 ${fmt(wages)}${income ? `，海域主导收益 +${fmt(income)}` : ''}。`, income ? 'good' : '');
-  if (S.gold < -5000) { for (const sh of S.fleet) sh.crew = Math.max(1, Math.floor(sh.crew * 0.8)); log('商会严重负债，大量船员弃船而去！', 'bad'); }
+  if (S.gold < -5000) { for (const sh of S.fleet) sh.crew = Math.max(crewFloor(sh), Math.floor(sh.crew * 0.8)); log('商会严重负债，大量船员弃船而去！', 'bad'); }
 }
 
 /* ========= 声望 ========= */
@@ -218,6 +232,9 @@ export function weatherTick() {
 }
 export function setWeather(type, days) { S.weather = { type, days }; }
 export const weatherSpeed = () => S.weather?.type === 'storm' ? 0.72 : S.weather?.type === 'rain' ? 0.9 : 1;
+
+/** 系统性减员（断粮 / 欠薪）的下限：最后一艘船必须还能出航，否则玩家在港内无路可走 */
+export function crewFloor(sh) { return S.fleet.length === 1 ? Math.max(1, Math.ceil(T(sh).crew * 0.2)) : 1; }
 
 /* ========= 航行参数 ========= */
 export function fleetSpeed() {
@@ -285,6 +302,8 @@ export function blog(msg, cls = '') { B.log.push({ msg, cls }); }
 export const alive = f => f.filter(s => s.hp > 0);
 export function enemySpeed() { return Math.min(...B.enemy.map(s => SHIP_TYPES[s.type].speed)); }
 export function fleeChance() { return clamp(0.35 + (fleetSpeed() - enemySpeed()) * 0.12, 0.15, 0.9); }
+/** 真实撤退判定：离得越远越容易脱身。HUD 与结算必须共用这一个公式 */
+export function fleeChanceAt(minD) { return clamp(fleeChance() + Math.max(0, (Number.isFinite(minD) ? minD : 3) - 3) * 0.1, 0.1, 0.95); }
 /** 单目标炮击：距离 1/2/3 格伤害 100%/85%/70% */
 export function fireAt(a, t, mine, dist = 1) {
   const fall = dist <= 1 ? 1 : dist === 2 ? 0.85 : 0.7;
@@ -337,6 +356,7 @@ export function buy(gid, q) {
   S.stock[p.id][gid] = qt.to;
   S.avgCost = S.avgCost || {}; S.avgCost[gid] = Math.round((had * prevAvg + qt.total) / (had + q));
   hooks.onEvent('buy', { gid, qty: q });
+  hooks.onCargo();
   remember(p.id); hooks.render();
   hooks.toast(`买入 ${G[gid].name} ×${q} · 均价 ${qt.unit}${qt.unit > spot ? `（挂牌 ${spot}，吃掉了 ${Math.round((qt.unit / spot - 1) * 100)}% 的价格冲击）` : ''} · 共 ${fmt(qt.total)}`);
 }
@@ -351,6 +371,7 @@ export function sell(gid, q) {
   S.stock[p.id][gid] = qt.to;
   transferShare(p.zone, 'player', qt.total / 6000); checkWin();
   hooks.onEvent('sell', { gid, qty: q, pid: p.id });
+  hooks.onCargo();
   remember(p.id); hooks.render();
   hooks.toast(`卖出 ${G[gid].name} ×${q} · 均价 ${qt.unit}${qt.unit < spot ? `（挂牌 ${spot}，砸下去 ${Math.round((1 - qt.unit / spot) * 100)}%）` : ''} · 共 ${fmt(qt.total)}`);
 }
@@ -364,7 +385,9 @@ export function buySuppliesAt(unit, q) {
 export function buySupplies(q) {
   if (q === 'max') q = Math.min(freeSpace(), Math.floor(Math.max(0, S.gold) / SUPPLY_PRICE));
   q = Math.min(+q, freeSpace(), Math.floor(Math.max(0, S.gold) / SUPPLY_PRICE));
-  if (q <= 0) return hooks.toast('金币不足或货舱已满'); S.gold -= q * SUPPLY_PRICE; S.supplies += q; hooks.render();
+  if (q <= 0) return hooks.toast('金币不足或货舱已满'); S.gold -= q * SUPPLY_PRICE; S.supplies += q;
+  if (S.supplies >= dailySupply()) S.hunger = 0;      // 补上了就不该继续算断粮（否则航速永久 −1、ETA 全错）
+  hooks.render();
 }
 export function sellSupplies(q) { q = Math.min(+q, S.supplies); if (q <= 0) return; S.supplies -= q; S.gold += q; hooks.render(); }
 export function buyShip(type) {
@@ -430,6 +453,7 @@ export function save(silent) {
 export function migrate() {
   if (!S) return;
   S.ver = 3;
+  S.sig = PORTS_SIG;
   S.stats = S.stats || { trades: 0, battles: 0, wins: 0 };
   S.captain = S.captain || 'lin';
   S.weather = S.weather || { type: 'clear', days: 0 };
@@ -448,7 +472,16 @@ export function migrate() {
     }
   }
   for (const z of ZONES) if (!S.share[z.id]) S.share[z.id] = { player: 0, whale: 34, redsail: 33, goldsand: 33 };
+  // 换过地图数据集之后，存档里可能留着已经不存在的港口 id。只兜底 S.pos 不够——
+  // S.dest / S.voyage / 委托的起终点任何一处失效，renderTop 第一次渲染就会抛异常白屏。
   if (!port(S.pos)) { S.pos = START_PORT; S.ship = { x: projX(port(START_PORT).lon), y: projY(port(START_PORT).lat) }; S.dest = null; S.voyage = null; }
+  if (S.dest && !port(S.dest)) { S.dest = null; S.voyage = null; }
+  if (S.voyage && (!port(S.voyage.to) || !port(S.voyage.from))) { S.voyage = null; S.dest = null; }
+  if (S.ct && Array.isArray(S.ct.active)) S.ct.active = S.ct.active.filter(c => port(c.to) && port(c.from));
+  for (const key of ['mem', 'drift', 'stock', 'dev']) {
+    if (!S[key]) continue;
+    for (const pid of Object.keys(S[key])) if (!port(pid)) delete S[key][pid];
+  }
 }
 
 export function load(silent) {
@@ -464,6 +497,11 @@ export function load(silent) {
     }
     const d = JSON.parse(raw);
     if (!d || !d.fleet || !d.share || !d.ship) { if (!silent) hooks.toast('存档损坏'); return false; }
+    if (d.sig != null && d.sig !== PORTS_SIG) {
+      localStorage.removeItem(SAVE_KEY);
+      if (!silent) hooks.toast('地图数据已更新，旧存档不再兼容，已开启新航程');
+      return false;
+    }
     S = d; migrate();
     if (!silent) { hooks.toast('已读取存档'); hooks.render(); }
     return true;

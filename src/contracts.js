@@ -4,6 +4,14 @@ import { PORTS, GOODS, G, ZONES } from './data.js';
 import { S, port, zone, price, log, freeSpace, transferShare, checkWin } from './game.js';
 import { seeded, hash, clamp, fmt } from './util.js';
 import { projX, projY, greatCircleKm } from './geo.js';
+import { hooks } from './game.js';
+
+/** 两港之间的真实航程（逻辑单位）。表现层通过 hooks.routeBetween 注入 A* 结果；没注入时退回直线。 */
+const routeUnits = (a, b) => {
+  const v = hooks.routeBetween && hooks.routeBetween(a.id, b.id);
+  return Number.isFinite(v) && v > 0 ? v : Math.hypot(projX(b.lon) - projX(a.lon), projY(b.lat) - projY(a.lat));
+};
+const DAY_UNITS = 48;        // 开局航速 6 的 dayDistance，委托期限以此为准
 
 export const PERIOD = 20;                       // 每 20 天刷新一批委托
 export const periodOf = day => Math.floor(day / PERIOD);
@@ -22,9 +30,10 @@ const CLIENT_TXT = {
   express: ['这封急信必须按时送到。', '人等着上船，误了时辰就白跑。', '快船的价钱，要的就是快。'],
 };
 
+/** 「附近的港」要按航海意义上的近，不是地图上的近——威尼斯到吕贝克直线很短，实际得绕整个欧洲 */
 function nearbyPorts(p, n = 6) {
   return PORTS.filter(x => x.id !== p.id)
-    .map(x => ({ x, d: Math.hypot(projX(x.lon) - projX(p.lon), projY(x.lat) - projY(p.lat)) }))
+    .map(x => ({ x, d: routeUnits(p, x) }))
     .sort((a, b) => a.d - b.d).slice(0, n).map(o => o.x);
 }
 
@@ -43,8 +52,8 @@ export function boardFor(pid, period = periodOf(S.day)) {
     const flavor = CLIENT_TXT[kind][Math.floor(rng() * 3)];
     if (kind === 'deliver' || kind === 'express') {
       const dest = near[Math.floor(rng() * near.length)];
-      const dist = Math.hypot(projX(dest.lon) - projX(p.lon), projY(dest.lat) - projY(p.lat));
-      const baseDays = Math.max(2, Math.ceil(dist / 48));
+      const dist = routeUnits(p, dest);
+      const baseDays = Math.max(2, Math.ceil(dist / DAY_UNITS));
       if (kind === 'express') {
         const due = Math.round(baseDays * (1.15 + rng() * 0.25));
         out.push({ id, kind, from: pid, to: dest.id, days: due, client, flavor,
@@ -78,12 +87,20 @@ export function boardFor(pid, period = periodOf(S.day)) {
   return out;
 }
 
-export function ensureContracts() { if (!S.ct) S.ct = { active: [], done: 0, failed: 0 }; return S.ct; }
+export function ensureContracts() {
+  if (!S.ct) S.ct = { active: [], done: 0, failed: 0 };
+  if (!S.ct.closed) S.ct.closed = {};        // 已结算过的委托 id → 结算日，防止同一张单重复接
+  return S.ct;
+}
+/** 这张委托是不是已经结过账了（完成或违约都算） */
+export const isClosed = id => { ensureContracts(); return S.ct.closed[id] != null; };
 export const activeContracts = () => (S.ct ? S.ct.active : []);
 export const isTaken = id => activeContracts().some(c => c.id === id);
 
 export function accept(c) {
   ensureContracts();
+  if (isClosed(c.id)) return '这张委托已经结过账了，换一张吧。';
+  if (isTaken(c.id)) return '这张委托已经接下了。';
   if (S.ct.active.length >= 5) return '同时最多接 5 个委托。';
   if (c.kind === 'deliver' && freeSpace() < c.qty) return `货舱空间不足：这批托运货需要 ${c.qty} 格，当前空舱 ${freeSpace()} 格。`;
   const rec = { ...c, dueDay: S.day + c.days, prog: 0 };
@@ -93,6 +110,7 @@ export function accept(c) {
   }
   S.ct.active.push(rec);
   log(`接下委托：${c.label}，报酬 ${fmt(c.reward)} 金币。`, 'gold');
+  if (!S.dest && !accept._re) { accept._re = 1; try { recheckHere(); } finally { accept._re = 0; } }
   return null;
 }
 /** 主动放弃委托：立刻按违约处理 */
@@ -107,6 +125,7 @@ export function abandon(id) {
 function finish(c, ok, quit = false) {
   ensureContracts();
   S.ct.active = S.ct.active.filter(x => x.id !== c.id);
+  S.ct.closed[c.id] = S.day;                 // 结过账就封存，同周期内不能再接同一张
   if (ok) {
     S.ct.done++; S.gold += c.reward;
     const zid = port(c.to).zone;
@@ -149,6 +168,12 @@ export function contractEvent(type, d = {}) {
   }
   for (const c of done) finish(c, true);
   return done;
+}
+
+/** 停泊时货物有变动（买入 / 接单）也要复判一次，否则「已经在交付港」的情况永远结算不了 */
+export function recheckHere() {
+  if (S.dest) return [];
+  return contractEvent('arrive', { pid: S.pos });
 }
 
 export function progressText(c) {

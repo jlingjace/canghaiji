@@ -79,7 +79,7 @@ export function chooseCaptain() {
 }
 function help() {
   showModal(`<h2>玩法说明</h2>
-  <p><b>目标</b>：在西洋、北海、东海、南洋、珍珠海、黄金海六大海域都取得 ≥50% 的势力份额。</p>
+  <p><b>目标</b>：在 ${ZONES.length} 片海域中任意 ${VICTORY_ZONES} 片取得 ≥50% 的势力份额。</p>
   <p><b>世界</b>：这是一张真实世界地图，港口都在它们真实的经纬度上。航线会自动绕开陆地，所以从里斯本去果阿要绕好望角（约 42 天），去塞维利亚只要 2 天。滚轮缩放，拖动平移，<kbd>🌍</kbd> 看全图，<kbd>？</kbd> 是图例。</p>
   <p><b>找港口</b>：图标越大规模越大，上方金色短条是造船厂等级（▮▮▮ 才能造盖伦帆船与巡防舰）。悬停看详情，<kbd>📖 名录</kbd> 可按海域、规模、造船厂、商品利润筛选排序，点「前往」直接出航。</p>
   <p><b>航行</b>：点击港口出航，途中可改航向。<kbd>⌖ 船队</kbd> 回到船上，<kbd>▶</kbd> 快进。每天消耗补给 = 船员数 ÷ 20，远洋要备足或中途补给。</p>
@@ -137,8 +137,19 @@ function sail(pid) {
   g.log(S.dest ? `船队改变航向，前往 ${to.name}。` : `从 ${port(S.pos).name} 启航前往 ${to.name}，预计 ${g.voyageDays(pid)} 天。`);
   map.startVoyage(pid); S.tab = 'port'; render();
 }
+/** 整份 S 被换掉之后（读档 / 新游戏）把表现层同步过来：收掉战斗、重建对应场景 */
+function afterStateSwap() {
+  if (B) { g.clearBattle(); map.battle.end(); }
+  // setMode 会立刻重建港口街景，而街景要查任务标记——必须先把任务 / 委托状态补齐，
+  // 否则新开局时 portMarkers 会读到 undefined 直接抛异常。
+  Q.ensureQuestState(); C.ensureContracts();
+  map.setMode(S.dest ? 'sea' : 'port');
+  renderMapCtl(); render();
+}
 function arrive(pid) {
-  flash(); map.setMode('port'); audio.sfx('bell'); S.escorted = false; C.contractEvent('arrive', { pid }); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
+  flash(); map.setMode('port'); audio.sfx('bell'); S.escorted = false;
+  if (S.supplies >= g.dailySupply()) S.hunger = 0;
+  C.contractEvent('arrive', { pid }); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
   S.tab = 'port'; S.ptab = 'market'; Q.questEvent('arrive', { pid }); g.save(true); render();
 }
 
@@ -174,6 +185,12 @@ function renderBattleHUD() {
   const eName = B.npc ? N.FACTION_LABEL[B.npc.faction] + '船队' : B.kind === 'pirate' ? '海盗船队' : rival(B.rivalId).name + '船队';
   const eCap = B.kind === 'pirate' ? CHARS.barro : CHARS[RIVAL_REP[B.rivalId]] || CHARS.barro; const myCap = captain();
   const bar = (hp, max) => `<div class="hpbar"><i style="width:${clamp(hp / max * 100, 0, 100)}%;background:${hp / max < 0.3 ? 'var(--bad)' : 'var(--good)'}"></i></div>`;
+  // 撤退成功率要用和 battle.js 同一个公式（含距离加成），否则开局显示的数字比实际低 40 个百分点
+  const myAlive = (B.units || []).filter(u => u.side === 'p' && u.ref.hp > 0);
+  const foeAlive = (B.units || []).filter(u => u.side === 'e' && u.ref.hp > 0);
+  let minD = Infinity;
+  for (const a of myAlive) for (const b of foeAlive) minD = Math.min(minD, hexDist(a, b));
+  const flee = Math.round(g.fleeChanceAt(minD) * 100);
   const units = (B.units || []).filter(u => u.side === 'p');
   const inRange = sel => {
     if (!sel || sel.acted) return '';
@@ -193,7 +210,7 @@ function renderBattleHUD() {
     const sel = B.sel; const mr = sel ? moveRange(sel) : 0; const tgt = B.target;
     ctl = `<div class="card"><b>${sel ? sel.ref.name : '选择一艘船'}</b> ${sel ? `<span class="muted">移动 ${mr} 格 · 射程 ${RANGE} 格 · ${sel.moved ? '已移动' : '可移动'} · ${sel.acted ? '已行动' : '可行动'}</span>` : ''}
       ${tgt ? `<p>目标 <b class="bad">${tgt.ref.name}</b>（距离 ${hexDist(sel, tgt)} 格）</p><div class="row"><button class="btn primary" data-a="bfire">炮击</button><button class="btn" data-a="bboard" ${hexDist(sel, tgt) === 1 ? '' : 'disabled'}>接舷${hexDist(sel, tgt) === 1 ? '' : '（需相邻）'}</button><button class="btn" data-a="bcancel">取消</button></div>`
-        : `${inRange(sel)}<p class="muted" style="font-size:12px">点绿色格子移动，点红圈敌船或用上方按钮攻击。</p><div class="row"><button class="btn" data-a="bwait" ${sel ? '' : 'disabled'}>待机</button><button class="btn" data-a="bend">结束回合</button><button class="btn danger" data-a="bflee">撤退（约 ${Math.round(g.fleeChance() * 100)}%）</button></div>`}
+        : `${inRange(sel)}<p class="muted" style="font-size:12px">点绿色格子移动，点红圈敌船或用上方按钮攻击。</p><div class="row"><button class="btn" data-a="bwait" ${sel ? '' : 'disabled'}>待机</button><button class="btn" data-a="bend">结束回合</button><button class="btn danger" data-a="bflee">撤退（约 ${flee}%）</button></div>`}
     </div>`;
   }
   return `<h2>海战 · ${eName}</h2><div class="vs"><div class="bust-wrap still">${bust(myCap, 64)}</div><div><b>${myCap.name}</b><br><span class="muted" style="font-size:12px">${myCap.title}</span></div><span class="vsx">VS</span><div style="text-align:right"><b>${eCap.name}</b><br><span class="muted" style="font-size:12px">${eCap.title}</span></div><div class="bust-wrap flip still">${bust(eCap, 64)}</div></div>
@@ -276,7 +293,7 @@ function portDirectory() {
   const rows = PORTS.map(p => {
     const known = !!S.mem[p.id];
     const d = Math.round(geo.greatCircleKm(geo.unprojLon(here.x), geo.unprojLat(here.y), p.lon, p.lat));
-    const days = Math.max(1, Math.ceil(Math.hypot(geo.projX(p.lon) - here.x, geo.projY(p.lat) - here.y) / g.dayDistance()));
+    const days = g.voyageDays(p.id);
     let best = null;
     let per = 0;
     if (dirGood && known && S.mem[p.id].prices[dirGood] != null) {
@@ -330,7 +347,7 @@ function bestMarket(gid, fromPid = S.pos) {
     const pr = S.mem[pid].prices[gid]; if (pr == null) continue;
     const p = port(pid);
     const sell = g.sellFromSpot(p, pr);
-    const days = Math.max(1, Math.ceil(Math.hypot(geo.projX(p.lon) - geo.projX(here.lon), geo.projY(p.lat) - geo.projY(here.lat)) / g.dayDistance()));
+    const days = g.voyageDays(p.id);          // 用真实绕行航程，直线会把绕好望角的航线少算一半
     const profit = sell - cost;
     const perDay = profit / days;
     if (profit > 0 && (!best || perDay > best.perDay)) best = { p, price: sell, profit, days, perDay };
@@ -344,12 +361,12 @@ function renderBoard(p) {
   const act = C.activeContracts();
   const KIND = { deliver: '运货', procure: '采购', bounty: '剿匪', express: '快航' };
   const card = c => {
-    const taken = C.isTaken(c.id);
+    const taken = C.isTaken(c.id), closed = C.isClosed(c.id);
     const cl = CHARS[c.client] || CHARS.qian;
     return `<div class="card"><div class="row"><span class="badge ${c.kind === 'bounty' ? 'high' : 'low'}">${KIND[c.kind]}</span><b>${c.label}</b>
       <span class="spacer"></span><span class="gold">${fmt(c.reward)} 金币</span></div>
       <div class="row" style="margin-top:2px"><span class="muted" style="font-size:11px">${cl.name}：“${c.flavor}”</span></div>
-      <div class="row" style="margin-top:6px"><button class="btn sm ${taken ? '' : 'primary'}" data-a="ctAccept" data-c="${c.id}" ${taken ? 'disabled' : ''}>${taken ? '已接下' : '接受委托'}</button>
+      <div class="row" style="margin-top:6px"><button class="btn sm ${taken || closed ? '' : 'primary'}" data-a="ctAccept" data-c="${c.id}" ${taken || closed ? 'disabled' : ''}>${closed ? '已结清' : taken ? '已接下' : '接受委托'}</button>
       <span class="muted" style="font-size:11px">${c.days} 天内完成${c.kind === 'deliver' ? `，需要 ${c.qty} 格空舱 · 货物由委托方装船，途中不可变卖` : ''}${c.kind === 'procure' ? '，货要自己从产地运来' : ''}</span></div></div>`;
   };
   const mine = act.length ? act.map(c => `<div class="card"><div class="row"><span class="badge ${C.daysLeft(c) <= 3 ? 'high' : 'low'}">剩 ${C.daysLeft(c)} 天</span><b>${c.label}</b><span class="spacer"></span><span class="gold">${fmt(c.reward)}</span></div>
@@ -434,7 +451,7 @@ function renderPort() {
   const p = port(S.pos), z = zone(p.zone); const leader = g.zoneLeader(z.id);
   const sub = [['market', '市场'], ['yard', '造船厂'], ['tavern', '酒馆'], ['board', '委托'], ['invest', '投资']];
   let html = `<h2>${p.name} <span class="muted" style="font-size:13px">${z.name} · 造船厂等级 ${p.yard} · 发展度 ${S.dev[p.id].toFixed(1)}</span></h2>
-    <p class="muted" style="font-size:12px">海域主导：<span style="color:${FACTION_COLOR[leader]}">${FACTION_NAME[leader]}</span>（${S.share[z.id][leader].toFixed(1)}%）${g.dominated(z.id) ? ' · <span class="good">你享有 8% 进货折扣</span>' : ''}</p>
+    <p class="muted" style="font-size:12px">海域主导：<span style="color:${FACTION_COLOR[leader]}">${FACTION_NAME[leader]}</span>（${S.share[z.id][leader].toFixed(1)}%）${g.dominated(z.id) ? ' · <span class="good">买卖价差收窄 25%</span>' : ''}</p>
     <div class="subtabs">${sub.map(([id, n]) => `<button class="btn ${S.ptab === id ? 'active' : ''}" data-a="ptab" data-ptab="${id}">${n}</button>`).join('')}</div>`;
   if (S.ptab !== 'board') html += npcCard({ market: 'qian', yard: 'mu', tavern: 'hong', invest: 'cen' }[S.ptab] || 'qian', g.npcLine(S.ptab === 'board' ? 'invest' : S.ptab, p));
   if (S.ptab === 'board') html += renderBoard(p);
@@ -483,7 +500,7 @@ function renderYard(p) {
         <button class="btn sm danger" data-a="sellShip" data-i="${i}" ${S.fleet.length > 1 ? '' : 'disabled'}>出售</button>
       </div></div>`; }).join('');
   return `<h3>出售船只</h3><div class="scroll"><table><thead><tr><th>船型</th><th class="r">载货</th><th class="r">耐久</th><th class="r">炮位</th><th class="r">航速</th><th class="r">船员</th><th class="r">价格</th><th></th></tr></thead><tbody>${forSale}</tbody></table></div>
-    <p class="muted" style="font-size:12px">${p.yard < 3 ? '更大的船只需要在 3 级造船厂购买（铁锚城、灰岩堡、翠玉港、风语城、黑石港）。' : '这里可以买到所有船型。'}新船不含火炮与船员。</p>
+    <p class="muted" style="font-size:12px">${p.yard < 3 ? `更大的船只需要在 3 级造船厂购买（${PORTS.filter(x => x.yard === 3).map(x => x.name).join('、')}）。` : '这里可以买到所有船型。'}新船不含火炮与船员。</p>
     <h3>我的船只 <button class="btn sm" data-a="repairAll">全部修理</button></h3>${mine}`;
 }
 function renderTavern(p) {
@@ -498,7 +515,7 @@ function renderTavern(p) {
 function renderInvest(p) {
   const z = zone(p.zone); const cur = S.share[z.id].player; const est = a => (a / (400 + 10 * cur)).toFixed(1);
   return `<div class="card"><b>${z.name} 势力份额</b>${shareBar(z.id)}
-    <p class="muted" style="font-size:12px;margin-top:8px">份额 ≥ 50% 即主导该海域：每月获得「份额 × 40」金币收益，并在该海域所有港口享受 8% 进货折扣。六大海域全部主导即获胜。</p></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">份额 ≥ 50% 即主导该海域：每月获得「份额 × 40」金币收益，并让该海域所有港口的买卖价差收窄 25%（买价约便宜 1.4%、卖价约高 1.4%）。主导 ${VICTORY_ZONES} 片海域即获胜。</p></div>
     <div class="card"><b>向 ${p.name} 投资</b> <span class="muted">建设港口以提升你的商会在 ${z.name} 的份额。份额越高，进一步扩张的成本越高。</span>
     <div class="row" style="margin-top:8px">
       <button class="btn" data-a="invest" data-amt="1000" ${S.gold < 1000 ? 'disabled' : ''}>投资 1,000（+${est(1000)}）</button>
@@ -553,6 +570,8 @@ function renderJournal() {
 }
 
 /* ========= 动作分派 ========= */
+/** 海战中禁止的动作：这些会整份换掉 S，让战斗状态指向已经不存在的船队 */
+const BATTLE_BLOCKED = new Set(['save', 'load', 'newGame', 'confirmNew']);
 const PORT_ACTIONS = new Set(['buy', 'sell', 'buySup', 'sellSup', 'buyShip', 'sellShip', 'repair', 'repairAll', 'addCannon', 'removeCannon', 'hire', 'dismiss', 'rumor', 'invest', 'rest', 'ptab']);
 export const ACTIONS = {
   tab: d => { S.tab = d.tab; render(); },
@@ -636,9 +655,10 @@ export const ACTIONS = {
   },
   ctQuitYes: d => { const err = C.abandon(d.c); if (err) toast(err); closeModal(); render(); },
   closeModal: () => { closeModal(); render(); }, help: () => help(),
-  save: () => g.save(false), load: () => { resetGoldTween(); g.load(false); },
+  save: () => g.save(false),
+  load: () => { resetGoldTween(); if (g.load(false)) afterStateSwap(); },
   newGame: () => showModal(`<h2>开始新游戏？</h2><p>当前进度会被覆盖。</p><div class="row"><button class="btn danger" data-a="confirmNew">开始新游戏</button><button class="btn" data-a="closeModal">取消</button></div>`),
-  confirmNew: () => { g.newGame(); resetGoldTween(); closeModal(); map.snapCamera(); render(); chooseCaptain(); },
+  confirmNew: () => { g.newGame(); resetGoldTween(); closeModal(); afterStateSwap(); map.snapCamera(); chooseCaptain(); },
   pickCaptain: d => { S.captain = CAPTAIN_KEYS.includes(d.c) ? d.c : 'lin'; g.log(`${CHARS[S.captain].name} 就任船长。`, 'gold'); closeModal(); Q.maybePrologue(); help(); render(); },
   dlgNext: () => { if (!dlg) return; if (dlg.i >= dlg.pages.length - 1 && dlg.opts.accept) return; dlg.i++; if (dlg.i < dlg.pages.length) renderDlg(); else endDlg(); },
   dlgAccept: () => { const d = dlg; endDlg(); if (d?.opts.accept?.onAccept) d.opts.accept.onAccept(); render(); },
@@ -661,6 +681,8 @@ export function initUI(worldMap) {
   map = worldMap;
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
     routeLen: pid => map.routeLen(pid), npcDay: d => map.npc.day(d),
+    routeBetween: (a, b) => map.routeBetween(a, b),
+  onCargo: () => { if (!S.dest) C.recheckHere(); },      // 停泊时货物一变就复判委托，别只在抵港时算
     dayTick: () => C.contractEvent('day'),
     onEvent: Q.questEvent, showDialogue, hoverPort: showPortTip,
     questPorts: () => { const s = Q.questPorts(); for (const c of C.activeContracts()) s.add(c.to); return s; },
@@ -683,7 +705,13 @@ export function initUI(worldMap) {
     const b = e.target.closest('[data-a]'); if (!b || b.disabled) return;
     const a = b.dataset.a; if (b.classList.contains('btn') || b.classList.contains('ccard')) audio.sfx('click');
     if (S.dest && PORT_ACTIONS.has(a)) { toast('航行中，抵港后再操作'); return; }
+    // 海战进行中换掉整份 S，会让 B.units[].ref 指向旧船队：血量打在幽灵对象上、判负永远不成立
+    if (B && BATTLE_BLOCKED.has(a)) { toast('海战结束后再存读档'); return; }
     if (ACTIONS[a]) ACTIONS[a](b.dataset);
   });
-  setInterval(() => { if (S && S.dest && !B) g.save(true); }, 10000);
+  // 自动存档不能只在海上跑——靠港经营半小时再关页面，之前全都不落盘
+  setInterval(() => { if (S && !B) g.save(true); }, 10000);
+  const flush = () => { if (S && !B && document.visibilityState === 'hidden') g.save(true); };
+  document.addEventListener('visibilitychange', flush);
+  window.addEventListener('pagehide', () => { if (S && !B) g.save(true); });
 }
