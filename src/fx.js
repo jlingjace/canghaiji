@@ -53,7 +53,7 @@ export function initMenuKeys(onTab) {
   document.addEventListener('keydown', e => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const modal = document.querySelector('.modal');
-    if (!modal) { if (/^[1-4]$/.test(e.key)) onTab(+e.key - 1); return; }
+    if (!modal) { if (/^[1-5]$/.test(e.key)) onTab(+e.key - 1); return; }
     const items = focusables(modal); if (!items.length) return;
     let i = items.findIndex(x => x.classList.contains('cur'));
     const nav = d => { i = (i + d + items.length) % items.length; setCur(items, items[i]); e.preventDefault(); };

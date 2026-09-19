@@ -8,6 +8,7 @@ export const SAVE_KEY = 'aot-save-v2';
 export const hooks = {
   render() {}, renderTop() {}, showModal() {}, closeModal() {}, toast() {},
   renderBattle() {}, onArrive() {}, rollEvent() {}, openPortTab() {}, openSeaMap() {},
+  onEvent() {}, showDialogue() {}, questPorts() { return new Set(); }, portMarkers() { return {}; },
 };
 
 export const port = id => PORTS.find(p => p.id === id);
@@ -239,6 +240,7 @@ export function buy(gid, q) {
   S.gold -= q * pr; S.cargo[gid] = (S.cargo[gid] || 0) + q; S.stats.trades++;
   S.stock[p.id][gid] = clamp(S.stock[p.id][gid] + q * 0.5, -40, 60);
   S.avgCost = S.avgCost || {}; S.avgCost[gid] = pr;
+  hooks.onEvent('buy', { gid, qty: q });
   remember(p.id); hooks.render();
 }
 export function sell(gid, q) {
@@ -247,6 +249,7 @@ export function sell(gid, q) {
   S.gold += q * pr; S.cargo[gid] -= q; if (S.cargo[gid] <= 0) delete S.cargo[gid]; S.stats.trades++;
   S.stock[p.id][gid] = clamp(S.stock[p.id][gid] - q * 0.5, -40, 60);
   transferShare(p.zone, 'player', q * pr / 6000); checkWin();
+  hooks.onEvent('sell', { gid, qty: q, pid: p.id });
   remember(p.id); hooks.render();
 }
 export function buySupplies(q) {
@@ -297,7 +300,7 @@ export function rumor() {
 export function invest(amt) {
   amt = +amt; if (S.gold < amt) return hooks.toast('金币不足');
   const p = port(S.pos); const cur = S.share[p.zone].player; const pts = amt / (400 + 10 * cur);
-  S.gold -= amt; transferShare(p.zone, 'player', pts); S.dev[p.id] += amt / 5000;
+  S.gold -= amt; transferShare(p.zone, 'player', pts); S.dev[p.id] += amt / 5000; hooks.onEvent('invest', { pid: p.id, amt });
   log(`向 ${p.name} 投资 ${fmt(amt)} 金币，${zone(p.zone).name} 份额 +${pts.toFixed(1)}。`, 'good');
   checkWin(); hooks.render();
 }

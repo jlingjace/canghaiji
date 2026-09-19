@@ -59,9 +59,9 @@ export class WorldMap {
     }
 
     // 航迹 + 船
-    this.wakeLayer = new Container(); this.world.addChild(this.wakeLayer);
+    this.wakeLayer = new Container(); this.wakeLayer.eventMode = 'none'; this.world.addChild(this.wakeLayer);
     this.shipTex = makeShipTextures();
-    this.ship = new Sprite(this.shipTex.E[0]); this.ship.anchor.set(0.5, 0.72); this.ship.scale.set(3); this.world.addChild(this.ship);
+    this.ship = new Sprite(this.shipTex.E[0]); this.ship.anchor.set(0.5, 0.72); this.ship.scale.set(3); this.ship.eventMode = 'none'; this.world.addChild(this.ship);
 
     // 昼夜遮罩
     this.night = new Graphics().rect(0, 0, W * WS, H * WS).fill(0x0a1030); this.night.alpha = 0; this.night.eventMode = 'none'; this.world.addChild(this.night);
@@ -99,12 +99,14 @@ export class WorldMap {
 
   /* ----- 港口标记：主导势力光环 / 已到访 / 当前停泊 ----- */
   refreshPorts() {
+    const qp = hooks.questPorts();
     for (const p of PORTS) {
       const o = this.ports[p.id]; const leader = zoneLeader(p.zone); const sh = S.share[p.zone][leader];
       o.ring.clear();
       o.ring.circle(0, -4, 24).stroke({ width: 3, color: sh >= 50 ? FACTION_COLOR[leader] : zone(p.zone).color, alpha: sh >= 50 ? 0.9 : 0.25 });
       if (p.id === S.pos && !S.dest) o.ring.circle(0, -4, 29).stroke({ width: 2, color: 0xf2c14e, alpha: 0.9 });
-      o.label.style.fill = S.mem[p.id] ? '#e8f0f8' : '#9fb2c6';
+      const star = qp.has(p.id); o.label.text = star ? `★ ${p.name}` : p.name;
+      o.label.style.fill = star ? '#f2c14e' : S.mem[p.id] ? '#e8f0f8' : '#9fb2c6';
     }
   }
 

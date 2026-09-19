@@ -127,6 +127,8 @@ kbd{background:#06101a;border:1px solid var(--line2);padding:0 5px;font:10px var
 .npc.big > div:last-child{min-height:170px}
 .ccard .bust-wrap{margin-bottom:4px}
 .vs .bust-wrap{animation-duration:.22s}
+.spacer{flex:1}
+.dlg-text{font-size:14px;line-height:1.8;min-height:52px}
 @keyframes lids{0%,93%{opacity:0}94%,100%{opacity:1}}
 @keyframes slideUp{from{transform:translateY(26px);opacity:0}to{transform:translateY(0);opacity:1}}
 

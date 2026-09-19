@@ -40,6 +40,8 @@ export class BattleScene {
     this.units = new Container(); this.root.addChild(this.units);
     this.fx = new Container(); this.root.addChild(this.fx);
     this.top = new Container(); this.root.addChild(this.top);
+    // 只有六角格热区参与命中测试，其余图层（船、名字、血条、高亮、特效）一律穿透
+    for (const c of [this.water, this.gridG, this.hl, this.units, this.fx, this.top]) c.eventMode = 'none';
 
     for (let row = 0; row < ROWS; row++) for (let col = 0; col < COLS; col++) {
       const c = this.center({ col, row }); const pts = this.hexPts(c.x, c.y, R - 1);
@@ -126,9 +128,10 @@ export class BattleScene {
     if (!sel.moved) { const ok = this.reachable(sel).some(r => key(r) === key(h)); if (!ok) return hooks.toast('超出移动范围'); this.moveUnit(sel, h).then(() => { sel.moved = true; this.refresh(); }); }
   }
   select(i) { const u = B.units.find(x => x.id === 'p' + i); if (u && u.ref.hp > 0) { B.sel = u; B.target = null; this.refresh(); } }
-  async act(a) {
+  async act(a, tgt = null) {
     if (!this.active || this.busy || B.over) return;
     const sel = B.sel;
+    if (tgt && sel && !sel.acted && tgt.ref.hp > 0 && hexDist(sel, tgt) <= RANGE) { B.target = tgt; }
     if (a === 'cancel') { B.target = null; this.refresh(); return; }
     if (a === 'wait' && sel) { sel.acted = true; sel.moved = true; this.afterAction(); return; }
     if (a === 'endTurn') { for (const u of this.aliveUnits('p')) { u.acted = true; u.moved = true; } this.afterAction(); return; }

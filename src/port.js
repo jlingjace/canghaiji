@@ -57,7 +57,7 @@ export class PortScene {
     this.app = app; this.shipTex = shipTex;
     this.root = new Container(); this.root.visible = false;
     this.scene = new Container(); this.root.addChild(this.scene);
-    this.labels = new Container(); this.root.addChild(this.labels);
+    this.labels = new Container(); this.labels.eventMode = 'none'; this.root.addChild(this.labels);
     this.pid = null; this.size = ''; this.t = 0; this.hover = null;
     this.pedTex = SHIRTS.map(c => PED_ROWS.map(r => canvasTexture(pixelsToCanvas(r, { h: '#3a2a1c', s: '#e9bd98', c, p: '#2a3a5a', b: '#3a2412' }, 1))));
     this.gullTex = GULL_ROWS.map(r => canvasTexture(pixelsToCanvas(r, { w: '#f4f4f4', b: '#888' }, 1)));
@@ -171,6 +171,12 @@ export class PortScene {
       const t = new Text({ text: h.name, style: { fontFamily: FONT, fontSize: 12, fill: '#e8f0f8', stroke: { color: '#06101a', width: 3 } } });
       t.anchor.set(0.5, 1); t.position.set((h.rect.x + h.rect.w / 2) * K, (h.rect.y - 2) * K); t.alpha = 0.8; this.labels.addChild(t); h.label = t;
     }
+    /* 任务标记 ! / ? */
+    this.markers = {};
+    const mk = (k, x, y) => { const t = new Text({ text: '!', style: { fontFamily: '"Press Start 2P",monospace', fontSize: 16, fill: '#f2c14e', stroke: { color: '#06101a', width: 4 } } }); t.anchor.set(0.5, 1); t.position.set(x, y); t.visible = false; t.baseY = y; this.labels.addChild(t); this.markers[k] = t; };
+    for (const h of this.hot) mk(h.key, (h.rect.x + h.rect.w / 2) * K, (h.rect.y - 2) * K - 16);
+    mk('ship', this.ship.x * K, (this.ship.y - 14) * K);
+    this.refreshMarkers();
     const shipLabel = new Text({ text: '出海 ▸ 海图', style: { fontFamily: FONT, fontSize: 12, fill: '#f2c14e', stroke: { color: '#06101a', width: 3 } } });
     shipLabel.anchor.set(0.5, 0); shipLabel.position.set(this.ship.x * K, (this.ship.y + 8) * K); this.labels.addChild(shipLabel);
     const plate = new Text({ text: `◆ ${p.name} · ${zone(p.zone).name}`, style: { fontFamily: FONT, fontSize: 14, fontWeight: '700', fill: '#f2c14e', stroke: { color: '#06101a', width: 4 }, letterSpacing: 2 } });
@@ -211,6 +217,11 @@ export class PortScene {
     return { roofH: roofH + (kind === 'office' ? 14 : kind === 'tavern' ? 4 : 0) };
   }
 
+  refreshMarkers() {
+    if (!this.markers || !this.pid) return;
+    const m = hooks.portMarkers(this.pid);
+    for (const k in this.markers) { const t = this.markers[k]; if (m[k]) { t.text = m[k]; t.visible = true; } else t.visible = false; }
+  }
   setHover(key) {
     this.hover = key;
     for (const h of this.hot) { const on = h.key === key; this.outlines[h.key].visible = on; h.label.alpha = on ? 1 : 0.8; h.label.style.fill = on ? '#f2c14e' : '#e8f0f8'; }
@@ -230,6 +241,7 @@ export class PortScene {
       if (s.x > W + 8) { s.vx = -Math.abs(s.vx); s.scale.x = -1; } if (s.x < -8) { s.vx = Math.abs(s.vx); s.scale.x = 1; }
     }
     if (this.flag) this.flag.texture = this.flagTex[Math.floor(t * 6) % 3];
+    if (this.markers) for (const k in this.markers) { const mk = this.markers[k]; if (mk.visible) mk.y = mk.baseY + Math.sin(t * 4) * 4; }
     this.foam.texture = this.foamTex[Math.floor(t * 2) % 2];
     this.ship.texture = this.shipTex.E[Math.floor(t * 1.6) % 2];
     if (this.smokePos) { this.smokeT += dt; if (this.smokeT > 0.35) { this.smokeT = 0; const g = new Graphics().rect(0, 0, 2, 2).fill(0xd8d8d8); g.position.set(this.smokePos.x, this.smokePos.y); g.alpha = 0.7; this.smokeLayer.addChild(g); this.smoke.push({ g, life: 2.2 }); } }

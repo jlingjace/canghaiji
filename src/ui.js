@@ -4,6 +4,8 @@ import * as g from './game.js';
 import { S, B, hooks, port, zone, rival, T, captain } from './game.js';
 import { portrait, bust } from './portraits.js';
 import { hexDist, moveRange, RANGE } from './battle.js';
+import * as Q from './quests.js';
+import { STORY } from './story.js';
 import { fmt, clamp, pick, randInt, rand } from './util.js';
 import { runTypewriter, setMenuCursor, floatText, tweenNumber, flash } from './fx.js';
 import { audio } from './audio.js';
@@ -28,6 +30,41 @@ function npcCard(key, line) { const c = CHARS[key]; return `<div class="npc">${p
 function showEvent(title, text, cb, who = 'ahai') {
   eventCb = cb; const c = CHARS[who];
   showModal(`<div class="npc big"><div class="bust-wrap">${bust(c, 136)}</div><div><h2>${title}</h2><p class="muted" style="font-size:12px;margin-top:-4px">${c.name} · ${c.title}</p><p data-tw>${text}</p></div></div><div class="row tw-actions"><button class="btn primary" data-a="eventOk">继续</button></div>`);
+}
+
+/* ========= 剧情对话序列 ========= */
+let dlg = null;
+function showDialogue(pages, opts = {}) { if (!pages || !pages.length) { if (opts.onEnd) opts.onEnd(); return; } dlg = { pages, i: 0, opts }; renderDlg(); }
+function renderDlg() {
+  const pg = dlg.pages[dlg.i]; const c = pg.who === 'captain' ? captain() : (CHARS[pg.who] || CHARS.ahai);
+  const last = dlg.i === dlg.pages.length - 1; const acc = dlg.opts.accept;
+  const btns = last && acc
+    ? `<button class="btn primary" data-a="dlgAccept">${acc.label}</button>${acc.decline ? `<button class="btn" data-a="dlgDecline">${acc.decline}</button>` : ''}`
+    : `<button class="btn primary" data-a="dlgNext">${last ? '结束' : '▶ 继续'}</button>`;
+  showModal(`<div class="npc big"><div class="bust-wrap">${bust(c, 136)}</div><div><h2>${dlg.opts.title || c.name}</h2><p class="muted" style="font-size:12px;margin-top:-4px">${c.name} · ${c.title}</p><p data-tw class="dlg-text ${pg.reward ? 'gold' : ''}">${Q.fillText(pg.text)}</p><p class="muted" style="font-size:10px;font-family:var(--pix)">${dlg.i + 1}/${dlg.pages.length}</p></div></div><div class="row tw-actions">${btns}</div>`);
+}
+function endDlg() { const d = dlg; dlg = null; closeModal(); if (d && d.opts.onEnd) d.opts.onEnd(); }
+
+/* ========= 任务页 ========= */
+function renderQuests() {
+  Q.ensureQuestState();
+  const bar = (v, t) => `<div class="hpbar"><i style="width:${clamp(v / t * 100, 0, 100)}%;background:${v >= t ? 'var(--good)' : 'var(--gold)'}"></i></div>`;
+  const rewardTxt = r => [r?.gold ? fmt(r.gold) + ' 金币' : '', r?.sharePts ? `${zone(r.shareZone).name}份额 +${r.sharePts}` : '', r?.ship ? SHIP_TYPES[r.ship].name : '', r?.cannons ? `火炮 +${r.cannons}` : '', r?.crew ? `船员 +${r.crew}` : ''].filter(Boolean).join(' · ');
+  const card = q => `<div class="card"><div class="row"><b>${q.type === 'main' ? '◆ ' : ''}${q.title}</b><span class="muted" style="font-size:11px">${CHARS[q.giver]?.name || ''}</span><span class="spacer"></span>${Q.qStatus(q.id) === 'ready' ? `<span class="badge low">可交付 → ${port(q.turnIn).name}</span>` : ''}</div>
+    ${q.objectives.map((o, i) => { const v = Q.objValue(q, i), t = Q.objTarget(o); return `<div style="font-size:12px;margin-top:4px">${Q.objDone(q, i) ? '☑' : '☐'} ${o.label} <span class="muted">${Math.min(v, t)}/${t}</span>${bar(v, t)}</div>`; }).join('')}
+    ${rewardTxt(q.reward) ? `<div class="muted" style="font-size:11px;margin-top:4px">奖励：${rewardTxt(q.reward)}</div>` : ''}</div>`;
+  const act = Q.activeQuests(); const mains = act.filter(q => q.type === 'main'), sides = act.filter(q => q.type === 'side');
+  const nm = Q.nextMain(); let hint = '';
+  if (nm && Q.qStatus(nm.id) === 'locked') hint = Q.prereqMet(nm)
+    ? `<p class="gold" style="font-size:12px">下一章「${nm.title}」：${nm.port ? `前往 ${port(nm.port).name} 找 ${CHARS[nm.giver]?.name || ''}` : '停靠任意港口即可开启'}</p>`
+    : `<p class="muted" style="font-size:12px">下一章「${nm.title}」尚未解锁${nm.prereq?.share ? `（需 ${zone(nm.prereq.share.zone).name} 份额 ≥ ${nm.prereq.share.pct}%）` : nm.prereq?.day ? `（第 ${nm.prereq.day} 天后）` : ''}。</p>`;
+  const clues = Q.QUESTS.filter(q => q.type === 'side' && Q.qStatus(q.id) === 'locked' && Q.prereqMet(q) && q.port && !S.q.declined[q.id]).slice(0, 6)
+    .map(q => `<div style="font-size:12px">◇ ${port(q.port).name}（${zone(port(q.port).zone).name}）· ${CHARS[q.giver]?.name || ''} 有一件委托</div>`).join('');
+  const declined = Q.QUESTS.filter(q => S.q.declined[q.id]).length;
+  return `<h2>任务</h2><p class="muted" style="font-size:12px">${STORY.title} · 主线 ${Q.MAIN.filter(q => Q.qStatus(q.id) === 'done').length}/${Q.MAIN.length} 章 · 已完成 ${Q.doneCount()} 个任务</p>
+    <h3>主线</h3>${mains.map(card).join('')}${!mains.length && !nm ? '<p class="muted">主线已全部完成。</p>' : ''}${hint}
+    <h3>支线</h3>${sides.map(card).join('') || '<p class="muted" style="font-size:12px">暂无进行中的支线。</p>'}
+    <h3>线索</h3>${clues || '<p class="muted" style="font-size:12px">目前没有新的委托消息。</p>'}${declined ? `<p class="muted" style="font-size:11px">已婉拒 ${declined} 个委托，再次到访该港可重新接取。</p>` : ''}`;
 }
 
 /* ========= 开局 / 帮助 ========= */
@@ -73,7 +110,7 @@ function sail(pid) {
 }
 function arrive(pid) {
   flash(); map.setMode('port'); audio.sfx('bell'); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
-  S.tab = 'port'; S.ptab = 'market'; g.save(true); render();
+  S.tab = 'port'; S.ptab = 'market'; Q.questEvent('arrive', { pid }); g.save(true); render();
 }
 
 /* ========= 航行事件 ========= */
@@ -122,6 +159,12 @@ function renderBattleHUD() {
   const eCap = B.kind === 'pirate' ? CHARS.barro : CHARS[RIVAL_REP[B.rivalId]]; const myCap = captain();
   const bar = (hp, max) => `<div class="hpbar"><i style="width:${clamp(hp / max * 100, 0, 100)}%;background:${hp / max < 0.3 ? 'var(--bad)' : 'var(--good)'}"></i></div>`;
   const units = (B.units || []).filter(u => u.side === 'p');
+  const inRange = sel => {
+    if (!sel || sel.acted) return '';
+    const es = (B.units || []).filter(u => u.side === 'e' && u.ref.hp > 0 && hexDist(sel, u) <= RANGE);
+    if (!es.length) return `<p class="muted" style="font-size:12px">射程内无敌船（射程 ${RANGE} 格），先移动靠近。</p>`;
+    return es.map(e => { const d = hexDist(sel, e); return `<div class="row" style="margin:4px 0"><span style="font-size:12px"><b class="bad">${e.ref.name}</b> <span class="muted">距离 ${d}</span></span><button class="btn sm primary" data-a="bfireAt" data-e="${e.id}">炮击</button><button class="btn sm" data-a="bboardAt" data-e="${e.id}" ${d === 1 ? '' : 'disabled'}>接舷</button></div>`; }).join('');
+  };
   const mine = units.map((u, i) => { const s = u.ref, max = T(s).hp, sel = B.sel === u;
     return `<div class="bship ${s.hp <= 0 ? 'dead' : ''} ${sel ? 'sel' : ''}" data-a="bsel" data-i="${i}" style="cursor:pointer"><b>${sel ? '▶ ' : ''}${s.name}</b> <span class="muted">${SHIP_TYPES[s.type].name}</span>${s.hp > 0 && u.acted ? '<span class="badge low" style="float:right">已行动</span>' : s.hp > 0 && u.moved ? '<span class="badge" style="float:right;color:var(--muted);border-color:var(--muted)">已移动</span>' : ''}
       ${bar(s.hp, max)}<small class="muted">耐久 ${Math.max(0, s.hp)}/${max} · 火炮 ${s.cannons} · 船员 ${s.crew}</small></div>`; }).join('');
@@ -135,7 +178,7 @@ function renderBattleHUD() {
     const tgt = B.target;
     ctl = `<div class="card"><b>${sel ? sel.ref.name : '选择一艘船'}</b> ${sel ? `<span class="muted">移动 ${mr} 格 · 射程 ${RANGE} 格 · ${sel.moved ? '已移动' : '可移动'} · ${sel.acted ? '已行动' : '可行动'}</span>` : ''}
       ${tgt ? `<p>目标 <b class="bad">${tgt.ref.name}</b>（距离 ${hexDist(sel, tgt)} 格）</p><div class="row"><button class="btn primary" data-a="bfire">炮击</button><button class="btn" data-a="bboard" ${hexDist(sel, tgt) === 1 ? '' : 'disabled'}>接舷${hexDist(sel, tgt) === 1 ? '' : '（需相邻）'}</button><button class="btn" data-a="bcancel">取消</button></div>`
-        : `<p class="muted" style="font-size:12px">点绿色格子移动，点红圈敌船攻击。</p><div class="row"><button class="btn" data-a="bwait" ${sel ? '' : 'disabled'}>待机</button><button class="btn" data-a="bend">结束回合</button><button class="btn danger" data-a="bflee">撤退（约 ${Math.round(g.fleeChance() * 100)}%）</button></div>`}
+        : `${inRange(sel)}<p class="muted" style="font-size:12px">点绿色格子移动，点红圈敌船或用上方按钮攻击。</p><div class="row"><button class="btn" data-a="bwait" ${sel ? '' : 'disabled'}>待机</button><button class="btn" data-a="bend">结束回合</button><button class="btn danger" data-a="bflee">撤退（约 ${Math.round(g.fleeChance() * 100)}%）</button></div>`}
     </div>`;
   }
   return `<h2>海战 · ${eName}</h2><div class="vs"><div class="bust-wrap still">${bust(myCap, 64)}</div><div><b>${myCap.name}</b><br><span class="muted" style="font-size:12px">${myCap.title}</span></div><span class="vsx">VS</span><div style="text-align:right"><b>${eCap.name}</b><br><span class="muted" style="font-size:12px">${eCap.title}</span></div><div class="bust-wrap flip still">${bust(eCap, 64)}</div></div>
@@ -144,7 +187,7 @@ function renderBattleHUD() {
 }
 
 /* ========= 侧栏 ========= */
-export function render() { renderTop(); renderTabs(); renderPanel(); renderMapCtl(); if (map) map.refreshPorts(); }
+export function render() { Q.ensureQuestState(); Q.checkQuests(); renderTop(); renderTabs(); renderPanel(); renderMapCtl(); if (map) { map.refreshPorts(); if (map.port) map.port.refreshMarkers(); } Q.flushDialogues(); }
 function renderMapCtl() {
   const el = document.getElementById('mapctl'); if (!el || !map) return;
   if (B) { el.innerHTML = ''; return; }
@@ -175,12 +218,13 @@ function renderTop() {
   }
   lastGold = S.gold;
 }
-export const TABS = [['port', '港口'], ['fleet', '船队'], ['share', '势力'], ['journal', '航海志']];
+export const TABS = [['port', '港口'], ['quest', '任务'], ['fleet', '船队'], ['share', '势力'], ['journal', '航海志']];
 function renderTabs() { if (B) { document.getElementById('tabs').innerHTML = `<button class="active">⚔ 海战</button>`; return; } document.getElementById('tabs').innerHTML = TABS.map(([id, n]) => `<button class="${S.tab === id ? 'active' : ''}" data-a="tab" data-tab="${id}">${n}</button>`).join(''); }
 function renderPanel() {
   const el = document.getElementById('panel');
   if (B) { el.innerHTML = renderBattleHUD(); const bl = document.getElementById('blog'); if (bl) bl.scrollTop = bl.scrollHeight; return; }
   if (S.tab === 'port') el.innerHTML = S.dest ? renderAtSea() : renderPort();
+  else if (S.tab === 'quest') el.innerHTML = renderQuests();
   else if (S.tab === 'fleet') el.innerHTML = renderFleet();
   else if (S.tab === 'share') el.innerHTML = renderShare();
   else el.innerHTML = renderJournal();
@@ -314,22 +358,28 @@ export const ACTIONS = {
   seaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); },
   backPort: () => { map.setMode('port'); renderMapCtl(); },
   speed: () => { map.speedMul = map.speedMul === 1 ? 3 : 1; document.getElementById('speedbtn').textContent = `▶ ${map.speedMul}×`; if (S.tab === 'port' && S.dest) renderPanel(); },
-  closeModal: () => closeModal(), help: () => help(),
+  closeModal: () => { closeModal(); render(); }, help: () => help(),
   save: () => g.save(false), load: () => { resetGoldTween(); g.load(false); },
   newGame: () => showModal(`<h2>开始新游戏？</h2><p>当前进度会被覆盖。</p><div class="row"><button class="btn danger" data-a="confirmNew">开始新游戏</button><button class="btn" data-a="closeModal">取消</button></div>`),
   confirmNew: () => { g.newGame(); resetGoldTween(); closeModal(); map.snapCamera(); render(); chooseCaptain(); },
-  pickCaptain: d => { S.captain = CAPTAIN_KEYS.includes(d.c) ? d.c : 'lin'; g.log(`${CHARS[S.captain].name} 就任船长。`, 'gold'); closeModal(); render(); help(); },
+  pickCaptain: d => { S.captain = CAPTAIN_KEYS.includes(d.c) ? d.c : 'lin'; g.log(`${CHARS[S.captain].name} 就任船长。`, 'gold'); closeModal(); Q.maybePrologue(); help(); render(); },
+  dlgNext: () => { if (!dlg) return; if (dlg.i >= dlg.pages.length - 1 && dlg.opts.accept) return; dlg.i++; if (dlg.i < dlg.pages.length) renderDlg(); else endDlg(); },
+  dlgAccept: () => { const d = dlg; endDlg(); if (d?.opts.accept?.onAccept) d.opts.accept.onAccept(); render(); },
+  dlgDecline: () => { const d = dlg; endDlg(); if (d?.opts.accept?.onDecline) d.opts.accept.onDecline(); render(); },
   eventOk: () => { const cb = eventCb; eventCb = null; closeModal(); render(); if (cb) cb(); },
   attackRival: d => { const pd = pending; pending = null; g.startBattle('rival', d.rid, pd.enemy, pd.zone, pd.done); },
   avoidRival: () => { const pd = pending; pending = null; closeModal(); g.log('你调整航向，避开了对手的船队。'); pd.done(0); },
-  bsel: d => map.battle.select(+d.i), bfire: () => map.battle.act('fire'), bboard: () => map.battle.act('board'), bcancel: () => map.battle.act('cancel'),
+  bsel: d => map.battle.select(+d.i), bfire: () => map.battle.act('fire'),
+  bfireAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('fire', u); },
+  bboardAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('board', u); }, bboard: () => map.battle.act('board'), bcancel: () => map.battle.act('cancel'),
   bwait: () => map.battle.act('wait'), bend: () => map.battle.act('endTurn'), bflee: () => map.battle.act('flee'),
-  battleDone: () => { const cb = g.clearBattle(); map.battle.end(); closeModal(); map.setMode(S.dest ? 'sea' : 'port'); render(); if (cb) cb(0); },
+  battleDone: () => { const info = B ? { won: B.result === 'win', kind: B.kind, rivalId: B.rivalId, boss: B.boss } : null; const cb = g.clearBattle(); map.battle.end(); closeModal(); map.setMode(S.dest ? 'sea' : 'port'); if (info && info.won) Q.questEvent('battleWin', info); render(); if (cb) cb(0); },
 };
 
 export function initUI(worldMap) {
   map = worldMap;
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
+    onEvent: Q.questEvent, showDialogue, questPorts: Q.questPorts, portMarkers: Q.portMarkers,
     openPortTab: ptab => { S.tab = 'port'; S.ptab = ptab; render(); document.getElementById('panel').scrollTop = 0; },
     openSeaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); } });
   map.onPortTap = pid => planVoyage(pid);

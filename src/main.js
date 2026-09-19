@@ -3,6 +3,7 @@ import * as game from './game.js';
 import { newGame, hasSave, load } from './game.js';
 import { WorldMap } from './map.js';
 import { initUI, render, chooseCaptain, toast, ACTIONS, TABS } from './ui.js';
+import * as Q from './quests.js';
 import { initMenuKeys } from './fx.js';
 
 const map = new WorldMap();
@@ -12,7 +13,7 @@ await map.init(document.getElementById('mapwrap'));
 initUI(map);
 initMenuKeys(i => { game.S.tab = TABS[i][0]; render(); });
 render();
-if (fresh) chooseCaptain(); else toast('已载入上次存档');
+if (fresh) chooseCaptain(); else { toast('已载入上次存档'); if (!game.S.q) { Q.ensureQuestState(); Q.maybePrologue(); render(); } }
 
 // 开发调试句柄
 window.aot = { game, map, ACTIONS, render };
