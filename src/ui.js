@@ -81,10 +81,14 @@ export function chooseCaptain() {
 function help() {
   showModal(`<h2>玩法说明</h2>
   <p><b>目标</b>：在西洋、北海、东海、南洋、珍珠海、黄金海六大海域都取得 ≥50% 的势力份额。</p>
-  <p><b>航行</b>：点击海图上的港口即可出航，船队会实时航行，途中可以再点其他港口改变航向。拖动海图查看远处，<kbd>⌖ 船队</kbd> 让镜头回到船上，<kbd>▶</kbd> 切换航行快进。每天消耗补给 = 船员数 ÷ 10，断粮会减员。</p>
+  <p><b>世界</b>：这是一张真实世界地图，港口都在它们真实的经纬度上。航线会自动绕开陆地，所以从里斯本去果阿要绕好望角（约 42 天），去塞维利亚只要 2 天。滚轮缩放，拖动平移，<kbd>🌍</kbd> 看全图，<kbd>？</kbd> 是图例。</p>
+  <p><b>找港口</b>：图标越大规模越大，上方金色短条是造船厂等级（▮▮▮ 才能造盖伦帆船与巡防舰）。悬停看详情，<kbd>📖 名录</kbd> 可按海域、规模、造船厂、商品利润筛选排序，点「前往」直接出航。</p>
+  <p><b>航行</b>：点击港口出航，途中可改航向。<kbd>⌖ 船队</kbd> 回到船上，<kbd>▶</kbd> 快进。每天消耗补给 = 船员数 ÷ 20，远洋要备足或中途补给。</p>
+  <p><b>海上遇到船</b>：海面上的小船是各势力的商队、护航队、渔船和海盗，旗色代表阵营。靠近会触发遭遇，可以打招呼、海上交易、打听行情、雇佣护航、索要通行费、威慑劝降或开战。航行中点 <kbd>🚩 招呼</kbd> 可主动搭话。每种选择都会改变你与该势力的关系。</p>
+  <p><b>委托</b>：每个港口的委托板每 20 天换一批运货、采购、剿匪、快航的短期活计，有时限有报酬，完成还给海域份额。</p>
   <p><b>贸易</b>：每个港口有「特产」（约 55% 基准价）和「紧缺」（约 170% 基准价）。低买高卖，注意货舱容量与补给占位。大量买卖会影响当地价格，跨月逐步恢复。</p>
   <p><b>事件</b>：航程中点会遇到风暴、海盗、顺风、漂流物、热病，或与对手商会船队相遇（可选择攻击）。</p>
-  <p><b>势力份额</b>：投资港口、在该海域卖货、击败对手商会船队（+6）都能提升份额。主导海域每月有收益并有进货折扣。三家对手商会每月也在扩张。</p>
+  <p><b>势力份额</b>：投资港口、在该海域卖货、完成委托、击败对手商会船队（+6）都能提升份额。主导海域每月有收益并有进货折扣。三家对手商会每月也在扩张。在 10 个海域中主导 6 个即获胜。</p>
   <p><b>船队</b>：造船厂买船、修理、装炮；酒馆招募船员、打听情报、停泊休整。新船需要先招募船员才能出航。船队上限 6 艘。</p>
   <p><b>海战</b>：炮击靠火炮，接舷靠船员，撤退靠航速。全灭会被救起从头再来，但会失去全部货物和一半金币。</p>
   <p><b>存档</b>：每次抵港自动保存到浏览器本地，航行中每 10 秒自动保存；也可手动保存/读取。</p>
@@ -244,14 +248,18 @@ function portDirectory() {
     const d = Math.round(geo.greatCircleKm(geo.unprojLon(here.x), geo.unprojLat(here.y), p.lon, p.lat));
     const days = Math.max(1, Math.ceil(Math.hypot(geo.projX(p.lon) - here.x, geo.projY(p.lat) - here.y) / g.dayDistance()));
     let best = null;
-    if (dirGood && known && S.mem[p.id].prices[dirGood] != null) best = S.mem[p.id].prices[dirGood];
-    return { p, known, d, days, best };
+    let per = 0;
+    if (dirGood && known && S.mem[p.id].prices[dirGood] != null) {
+      best = S.mem[p.id].prices[dirGood];
+      per = (Math.round(best * 0.9) - g.buyPrice(port(S.pos), dirGood)) / days;
+    }
+    return { p, known, d, days, best, per };
   });
   const filtered = rows.filter(r => (dirZone === 'all' || r.p.zone === dirZone));
   filtered.sort((a, b) => dirSort === 'dist' ? a.d - b.d
     : dirSort === 'tier' ? (b.p.tier - a.p.tier) || (a.d - b.d)
     : dirSort === 'yard' ? (b.p.yard - a.p.yard) || (a.d - b.d)
-    : dirSort === 'price' ? ((b.best ?? -1) - (a.best ?? -1)) || (a.d - b.d)
+    : dirSort === 'price' ? ((b.per ?? -99) - (a.per ?? -99)) || ((b.best ?? -1) - (a.best ?? -1))
     : a.p.name.localeCompare(b.p.name));
   const TIER = ['', '小港', '中港', '大港'];
   const body = filtered.map(r => {
@@ -264,7 +272,7 @@ function portDirectory() {
       <td class="r"><span class="gold">${'▮'.repeat(p.yard)}</span>${'▯'.repeat(3 - p.yard)}</td>
       <td class="r">${fmt(r.d)} km<br><span class="muted">约 ${r.days} 天</span></td>
       <td style="white-space:normal;max-width:150px">${r.known ? `<span class="good">产</span> ${prod}<br><span class="bad">缺</span> ${dem}` : '<span class="muted">未到访</span>'}</td>
-      ${dirGood ? `<td class="r">${r.best != null ? r.best : '<span class="muted">-</span>'}</td>` : ''}
+      ${dirGood ? `<td class="r">${r.best != null ? `${r.best}<br><span class="${r.per > 0 ? 'good' : 'muted'}" style="font-size:10px">${r.per > 0 ? '+' + r.per.toFixed(1) + '/天' : '不划算'}</span>` : '<span class="muted">-</span>'}</td>` : ''}
       <td><button class="btn sm" data-a="dirGo" data-pid="${p.id}" ${p.id === S.pos && !S.dest ? 'disabled' : ''}>前往</button></td></tr>`;
   }).join('');
   showModal(`<h2>港口名录 <span class="muted" style="font-size:12px">共 ${PORTS.length} 港 · 已到访 ${Object.keys(S.mem).length}</span></h2>
@@ -272,15 +280,33 @@ function portDirectory() {
       <button class="btn sm ${dirZone === 'all' ? 'active' : ''}" data-a="dirZone" data-z="all">全部</button>
       ${ZONES.map(z => `<button class="btn sm ${dirZone === z.id ? 'active' : ''}" data-a="dirZone" data-z="${z.id}">${z.name}</button>`).join('')}</div>
     <div class="row" style="margin-bottom:6px"><span class="muted" style="font-size:12px">排序</span>
-      ${[['dist', '距离'], ['tier', '规模'], ['yard', '造船厂'], ['name', '名称'], ['price', '所选商品价']].map(([k, n]) => `<button class="btn sm ${dirSort === k ? 'active' : ''}" data-a="dirSort" data-s="${k}">${n}</button>`).join('')}</div>
+      ${[['dist', '距离'], ['tier', '规模'], ['yard', '造船厂'], ['name', '名称'], ['price', '所选商品利润']].map(([k, n]) => `<button class="btn sm ${dirSort === k ? 'active' : ''}" data-a="dirSort" data-s="${k}">${n}</button>`).join('')}</div>
     <div class="row" style="margin-bottom:8px"><span class="muted" style="font-size:12px">商品</span>
       <button class="btn sm ${dirGood ? '' : 'active'}" data-a="dirGood" data-g="">不筛选</button>
       ${GOODS.map(gd => `<button class="btn sm ${dirGood === gd.id ? 'active' : ''}" data-a="dirGood" data-g="${gd.id}">${gd.name}</button>`).join('')}</div>
-    <div class="scroll" style="max-height:52vh;overflow:auto"><table><thead><tr><th>港口</th><th>海域</th><th class="r">规模</th><th class="r">造船厂</th><th class="r">距离</th><th>特产 / 紧缺</th>${dirGood ? '<th class="r">已知价</th>' : ''}<th></th></tr></thead><tbody>${body}</tbody></table></div>
-    <p class="muted" style="font-size:11px">造船厂等级决定能买到的最大船型：▮▮▮ 可造全部船型。「已知价」来自到访记录与情报。</p>
+    <div class="scroll" style="max-height:52vh;overflow:auto"><table><thead><tr><th>港口</th><th>海域</th><th class="r">规模</th><th class="r">造船厂</th><th class="r">距离</th><th>特产 / 紧缺</th>${dirGood ? '<th class="r">已知价 / 每天</th>' : ''}<th></th></tr></thead><tbody>${body}</tbody></table></div>
+    <p class="muted" style="font-size:11px">造船厂等级决定能买到的最大船型：▮▮▮ 可造全部船型。「已知价」来自到访记录与情报，右下角是以当前港买价估算的每件每天利润。</p>
     <div class="row"><button class="btn" data-a="closeModal">关闭</button></div>`);
 }
 
+
+
+/** 某商品在已知港口中的最佳去处：{p, price, profit, days, perDay} */
+function bestMarket(gid, fromPid = S.pos) {
+  const here = port(fromPid); const cost = g.buyPrice(here, gid);
+  let best = null;
+  for (const pid in S.mem) {
+    if (pid === fromPid) continue;
+    const pr = S.mem[pid].prices[gid]; if (pr == null) continue;
+    const p = port(pid);
+    const sell = Math.round(pr * 0.9);
+    const days = Math.max(1, Math.ceil(Math.hypot(geo.projX(p.lon) - geo.projX(here.lon), geo.projY(p.lat) - geo.projY(here.lat)) / g.dayDistance()));
+    const profit = sell - cost;
+    const perDay = profit / days;
+    if (profit > 0 && (!best || perDay > best.perDay)) best = { p, price: sell, profit, days, perDay };
+  }
+  return best;
+}
 
 /* ========= 港口委托板 ========= */
 function renderBoard(p) {
@@ -389,14 +415,16 @@ function renderMarket(p) {
   const rows = GOODS.map(gd => {
     const bp = g.buyPrice(p, gd.id), sp = g.sellPrice(p, gd.id), have = S.cargo[gd.id] || 0; const ratio = g.price(p, gd.id) / gd.base;
     const tag = p.produce.includes(gd.id) ? '<span class="badge low">特产</span>' : p.demand.includes(gd.id) ? '<span class="badge high">紧缺</span>' : ratio < 0.85 ? '<span class="badge low">偏低</span>' : ratio > 1.25 ? '<span class="badge high">偏高</span>' : '';
+    const bm = bestMarket(gd.id);
     return `<tr><td>${gd.name} ${tag}</td><td class="r">${bp} / <span class="muted">${sp}</span></td><td class="r">${have || '<span class="muted">-</span>'}</td>
+      <td style="font-size:11px">${bm ? `<span class="good">${bm.p.name}</span> +${bm.profit}<br><span class="muted">${bm.days} 天 · ${bm.perDay.toFixed(1)}/天</span>` : '<span class="muted">—</span>'}</td>
       <td><span class="row nowrap"><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="1">买1</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="10">买10</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="max">买满</button>
       <button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="10" ${have ? '' : 'disabled'}>卖10</button><button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="all" ${have ? '' : 'disabled'}>全卖</button></span></td></tr>`;
   }).join('');
   return `<div class="card"><div class="row"><b>补给</b> <span class="muted">${g.SUPPLY_PRICE} 金币/单位 · 现有 ${S.supplies} · 日耗 ${g.dailySupply()} · 空舱 ${g.freeSpace()}</span></div>
     <div class="row" style="margin-top:6px"><button class="btn sm" data-a="buySup" data-q="10">+10</button><button class="btn sm" data-a="buySup" data-q="50">+50</button><button class="btn sm" data-a="buySup" data-q="max">买满</button><button class="btn sm" data-a="sellSup" data-q="10">卖10</button></div></div>
-    <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="font-size:12px">大量买入会推高当地价格，抛售会压低价格；每月逐步恢复。在一个海域卖货会缓慢提升你在该海域的份额。</p>`;
+    <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>最佳去处（每件）</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="font-size:12px">「最佳去处」依据你已到访或打听到的行情估算（含 10% 卖出折价与航程天数）。大量买卖会冲击当地价格，每月逐步恢复。</p>`;
 }
 function renderYard(p) {
   const forSale = YARD_SHIPS[p.yard].map(t => { const s = SHIP_TYPES[t];
@@ -564,7 +592,9 @@ export const ACTIONS = {
 export function initUI(worldMap) {
   map = worldMap;
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
-    onEvent: Q.questEvent, showDialogue, questPorts: Q.questPorts, portMarkers: Q.portMarkers, hoverPort: showPortTip,
+    onEvent: Q.questEvent, showDialogue, hoverPort: showPortTip,
+    questPorts: () => { const s = Q.questPorts(); for (const c of C.activeContracts()) s.add(c.to); return s; },
+    portMarkers: pid => { const m = Q.portMarkers(pid); const fresh = C.boardFor(pid).some(c => !C.isTaken(c.id)); if (fresh && !m.office) m.office = '!'; return m; },
     openPortTab: ptab => { S.tab = 'port'; S.ptab = ptab; render(); document.getElementById('panel').scrollTop = 0; },
     openSeaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); } });
   map.onPortTap = pid => planVoyage(pid);

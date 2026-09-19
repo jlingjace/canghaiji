@@ -92,8 +92,8 @@ export function zoneLeader(zid) { const sh = S.share[zid]; let best = null; for 
 export function checkWin() {
   if (S.won) return;
   if (ZONES.filter(z => S.share[z.id].player >= 50).length >= VICTORY_ZONES) {
-    S.won = true; log('六大海域尽归你的旗下，你成为了沧海之主！', 'gold');
-    hooks.showModal(`<h2>称霸沧海</h2><p>${dateStr()}，你的商会在六大海域的份额全部过半。海图上再无对手，你的名字将被写进每一座港口的年鉴。</p>
+    S.won = true; log(`${VICTORY_ZONES} 片海域尽归你的旗下，你成为了沧海之主！`, 'gold');
+    hooks.showModal(`<h2>称霸沧海</h2><p>${dateStr()}，你的商会已在 ${VICTORY_ZONES} 片海域取得过半份额。从里斯本到长崎，每一座港口的年鉴上都写着你的名字。</p>
       <p class="muted">航行 ${Math.floor(S.day / 360)} 年 ${Math.floor(S.day % 360 / 30)} 个月 · 交易 ${S.stats.trades} 次 · 海战 ${S.stats.battles} 场（胜 ${S.stats.wins}）</p>
       <p>游戏可以继续，尽情经营你的海上帝国。</p><div class="row"><button class="btn primary" data-a="closeModal">继续航行</button></div>`);
   }
@@ -323,7 +323,7 @@ export function npcLine(ctx, p) {
 
 /* ========= 存档 ========= */
 export function save(silent) {
-  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); if (!silent) hooks.toast('已保存'); }
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(S, (k, v) => typeof v === 'number' && !Number.isInteger(v) ? Math.round(v * 1000) / 1000 : v)); if (!silent) hooks.toast('已保存'); }
   catch (e) { if (!silent) hooks.toast('保存失败：浏览器存储不可用'); }
 }
 export function load(silent) {
