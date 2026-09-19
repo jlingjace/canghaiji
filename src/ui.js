@@ -566,7 +566,7 @@ export const ACTIONS = {
     renderTop(); encResult(msg, true);
   },
   encBack: () => { if (enc) showEncounter(enc.n, enc.mode); },
-  encDone: () => encFinish(),
+  encDone: () => { if (enc) enc.n.cooldown = Math.max(enc.n.cooldown, 240); encFinish(); },
   backPort: () => { map.setMode('port'); renderMapCtl(); },
   speed: () => { map.speedMul = map.speedMul === 1 ? 3 : 1; document.getElementById('speedbtn').textContent = `▶ ${map.speedMul}×`; if (S.tab === 'port' && S.dest) renderPanel(); },
   closeModal: () => { closeModal(); render(); }, help: () => help(),
@@ -601,6 +601,12 @@ export function initUI(worldMap) {
     openPortTab: ptab => { S.tab = 'port'; S.ptab = ptab; render(); document.getElementById('panel').scrollTop = 0; },
     openSeaMap: () => { map.setMode('sea'); renderMapCtl(); toast('点击港口出航，⚓ 回港返回街景'); } });
   map.onPortTap = pid => planVoyage(pid);
+  map.npc.onClick = n => {
+    if (B || enc || document.querySelector('.modal-bg')) return;
+    const d = Math.hypot(n.x - S.ship.x, n.y - S.ship.y);
+    if (d > 60) return toast(`${N.npcTitle(n)}还在 ${Math.round(d / 12)}° 外，靠近些再打招呼`);
+    showEncounter(n, 'meet');
+  };
   map.npc.onEncounter = (n, mode) => { if (B || enc || document.querySelector('.modal-bg')) return; if (S.escorted && n.kind === 'raider') return; showEncounter(n, mode); };
   map.npc.reset();
   const boot = () => { audio.init(); document.removeEventListener('pointerdown', boot); document.removeEventListener('keydown', boot); };

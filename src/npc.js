@@ -1,6 +1,6 @@
 /* 海上 NPC 船队：按海域势力份额生成、在港口之间往返、可见可接触；
    以及遭遇时的多选项互动与声望系统。NPC 本身不写入存档，读档时重新生成。 */
-import { Container, Sprite, Graphics, Text } from 'pixi.js';
+import { Container, Sprite, Graphics, Text, Rectangle } from 'pixi.js';
 import { PORTS, ZONES, GOODS, G, FACTION_COLOR, FACTION_NAME, RIVALS, SHIP_TYPES } from './data.js';
 import { S, port, zone, zoneLeader, price, fleetValue, totalCrew, rep, addRep, dayDistance } from './game.js';
 import { projX, projY } from './geo.js';
@@ -62,7 +62,8 @@ function makeNpc(zid) {
 
 export class NpcFleet {
   constructor(map) {
-    this.map = map; this.root = new Container(); this.root.eventMode = 'none';
+    this.map = map; this.root = new Container(); this.root.eventMode = 'passive';
+    this.onClick = () => {};
     this.list = []; this.views = new Map(); this.free = [];
     this.queue = []; this.k = 1; this.spawnT = 0;
     this.onEncounter = () => {};
@@ -166,22 +167,34 @@ export class NpcFleet {
         v = this.free.pop();
         if (!v) {
           const c = new Container();
-          const spr = new Sprite(m.shipTex.E[0]); spr.anchor.set(0.5, 0.72); spr.scale.set(1.4); c.addChild(spr);
+          c.eventMode = 'static'; c.cursor = 'pointer'; c.hitArea = new Rectangle(-11, -14, 22, 24);
+          const ring = new Graphics(); c.addChild(ring);
+          const spr = new Sprite(m.shipTex.E[0]); spr.anchor.set(0.5, 0.72); c.addChild(spr);
           const flag = new Graphics(); c.addChild(flag);
           const tag = new Text({ text: '', style: { fontFamily: FONT, fontSize: 9, fill: '#e8f0f8', stroke: { color: '#06101a', width: 3 } } });
           tag.anchor.set(0.5, 1); tag.position.set(0, -12); c.addChild(tag);
-          this.root.addChild(c); v = { c, spr, flag, tag };
+          this.root.addChild(c); v = { c, spr, flag, tag, ring };
+          c.on('pointertap', () => { if (m.dragDist > 6) return; const cur = v.npc; if (cur) this.onClick(cur); });
+          c.on('pointerover', () => { spr.tint = 0xffffff; v.tag.visible = true; });
+          c.on('pointerout', () => { const cur = v.npc; if (cur) spr.tint = TINT[cur.faction]; });
         }
-        v.c.visible = true; this.views.set(n.id, v);
+        v.npc = n; v.c.visible = true; this.views.set(n.id, v);
+        // 船型剪影按规模分三档
+        const sc = n.kind === 'fisher' ? 1.0 : n.ships >= 3 ? 1.9 : n.ships === 2 ? 1.5 : 1.2;
+        v.baseScale = sc; v.spr.scale.set(sc);
         v.spr.tint = TINT[n.faction];
-        v.flag.clear().rect(-2, -20, 7, 4).fill(FACTION_COLOR[n.faction] || 0xcccccc);
+        v.flag.clear().rect(-2, -8 - sc * 8, 7, 4).fill(FACTION_COLOR[n.faction] || 0xcccccc);
+        // 关系色环：友好绿 / 敌视红 / 中立灰
+        const r = rep(n.faction);
+        const rc = n.kind === 'raider' ? 0xe8646c : r >= 25 ? 0x5ad48a : r <= -25 ? 0xe8646c : 0x8fa6bd;
+        v.ring.clear().circle(0, -2, 9 + sc).stroke({ width: 1.5, color: rc, alpha: n.kind === 'raider' ? 0.9 : 0.5 });
         v.tag.text = n.kind === 'raider' ? '☠' : FACTION_LABEL[n.faction].slice(0, 2);
         v.tag.style.fill = n.kind === 'raider' ? '#ff9a9a' : '#cfdcea';
         v.c.scale.set(this.k);
       }
       v.c.position.set(wx, wy);
       const flip = Math.cos(n.heading) < 0;
-      v.spr.scale.x = flip ? -1.4 : 1.4;
+      v.spr.scale.x = flip ? -v.baseScale : v.baseScale;
       v.flag.x = flip ? -4 : 0;
       v.tag.visible = z > 0.55;
     }
@@ -231,11 +244,13 @@ export function encounterOptions(n, mode) {
   out.push({ id: 'greet', kind: 'talk', label: '打招呼', hint: '交换航海见闻，略微改善关系' });
   if (n.cargo && n.kind !== 'raider') out.push({ id: 'buy', kind: 'trade', label: '海上交易', hint: '买下他们的货，通常比港口便宜' });
   else if (n.cargo && n.kind === 'raider' && r > -20) out.push({ id: 'buy', kind: 'trade', label: '买下赃物', hint: '来路不明，但便宜得多；会提高海盗好感、降低商会好感' });
-  out.push({ id: 'info', kind: 'info', label: '打听行情（80 金币）', hint: '问出附近港口一件高价商品', disabled: S.gold < 80 });
-  if (n.kind === 'escort' && n.faction !== 'pirate') out.push({ id: 'hire', kind: 'hire', label: '雇佣护航（600 金币）', hint: '本次航程内海盗不会主动袭击', disabled: S.gold < 600 });
+  out.push({ id: 'info', kind: 'info', label: '打听行情（80 金币）', hint: S.gold < 80 ? '金币不足 80' : '问出附近港口一件高价商品', disabled: S.gold < 80 });
+  if (n.kind === 'escort' && n.faction !== 'pirate') out.push({ id: 'hire', kind: 'hire', label: '雇佣护航（600 金币）', hint: S.gold < 600 ? '金币不足 600' : '本次航程内海盗不会主动袭击', disabled: S.gold < 600 });
   if (mine && n.faction !== 'free' && n.kind !== 'raider') out.push({ id: 'toll', kind: 'demand', label: '索要通行费', hint: '你主导本海域；对方可能照付，也可能翻脸' });
   if (pr > 1.5 && n.kind !== 'fisher') out.push({ id: 'intimidate', kind: 'demand', label: '威慑劝降', hint: '实力碾压时可不战而取其货物，但名声受损' });
-  if (mode === 'ambush' || n.kind === 'raider') out.push({ id: 'bribe', kind: 'pay', label: '交买路钱', hint: '花钱脱身，避免一场恶战', disabled: S.gold < 300 });
+  if (mode === 'ambush' || n.kind === 'raider') out.push({ id: 'bribe', kind: 'pay', label: '交买路钱', hint: S.gold < 300 ? '金币不足，凑不出买路钱' : '花钱脱身，避免一场恶战', disabled: S.gold < 300 });
+  if (pr <= 1.5 && n.kind !== 'fisher') out.push({ id: 'intimidate', kind: 'demand', label: '威慑劝降', hint: '需要实力明显压制对方（提升船队规模与火炮）', disabled: true });
+  if (!mine && n.faction !== 'free' && n.kind !== 'raider') out.push({ id: 'toll', kind: 'demand', label: '索要通行费', hint: `需要你在${zone(zid).name}的份额过半`, disabled: true });
   out.push({ id: 'fight', kind: 'fight', label: '发动攻击', hint: n.kind === 'raider' ? '击沉海盗可获战利品' : '击败商会船队可夺取其海域份额，但关系会严重恶化' });
   out.push({ id: 'leave', kind: 'leave', label: mode === 'ambush' ? '全力甩开' : '继续航行', hint: mode === 'ambush' ? '航速高才容易摆脱' : '' });
   return out;
