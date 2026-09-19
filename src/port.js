@@ -111,12 +111,12 @@ export class PortScene {
    * 高精度的画面里，几个十来像素的静物只会像脏点。现在只留**少而大**的东西：
    * 一两堆明显的货、一面旗、几盏夜里会亮的灯，其余差异交给会动的元素（路人、停泊的船）。
    */
-  drawQuayProps(p, W, H, groundY, seaY) {
+  drawQuayProps(p, W, H, groundY, walkY) {
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const x = cv.getContext('2d');
     const px = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), Math.max(0, Math.round(w)), Math.max(0, Math.round(h))); };
     const rng = seeded(hash(p.id) + 91);
-    const band = Math.max(10, seaY - groundY);
+    const band = Math.max(10, walkY - groundY);      // 只在平整广场这一段里摆东西
     const yOf = t => Math.round(groundY + band * t);
     const dev = Math.min(3, (S.dev && S.dev[p.id]) || 0);
     const lamps = [];
@@ -190,6 +190,7 @@ export class PortScene {
     const toSceneX = f => (ox + dw * f) / K;
     return {
       groundY: Math.round(toScene(art.ground)),
+      walkY: Math.round(toScene(art.walk ?? (art.ground + (art.sea - art.ground) * 0.35))),
       seaY: Math.round(toScene(art.sea)),
       topY: Math.round(toScene(art.top)),
       spots: art.spots.map(([a, b]) => [Math.round(toSceneX(a)), Math.round(toSceneX(b))]),
@@ -219,6 +220,8 @@ export class PortScene {
     if (!artTex) this.artLayer.removeChildren().forEach(c => c.destroy());
     let horizon = Math.round(H * 0.34), groundY = Math.round(H * 0.72), seaY = Math.round(H * 0.855);
     if (L) { groundY = L.groundY; seaY = L.seaY; horizon = Math.round(L.topY * 0.6); }
+    // 行人与货堆只能待在平整广场上；广场以下是码头石岸的垂直立面，站上去会像贴在墙上
+    const walkY = L ? L.walkY : seaY - 14;
     const townY = Math.round(H * 0.58), wallY = townY;    // 中景城镇的地平 / 城墙顶
     this.groundY = groundY; this.seaY = seaY;
 
@@ -432,7 +435,7 @@ export class PortScene {
     if (!L) { this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg); } else {
       this.bg = null;
       // 手绘底图是整片海域共用的，靠这一层把每个港区分开
-      const props = this.drawQuayProps(p, W, H, groundY, seaY);
+      const props = this.drawQuayProps(p, W, H, groundY, walkY);
       this.props = new Sprite(canvasTexture(props.canvas)); this.props.eventMode = 'none'; this.scene.addChild(this.props);
       this.windows.push(...props.lamps);
       this.addMooredBoats(p, W, seaY, seeded(hash(p.id) + 313));
@@ -458,7 +461,7 @@ export class PortScene {
       const v = Math.floor(rng() * SHIRTS.length); const sp = new Sprite(this.pedTex[v][0]);
       sp.anchor.set(0.5, 1); sp.eventMode = 'none';
       const depth = rng();                                            // 近处的人更大更暗一点，拉开层次
-      sp.position.set(rng() * W, groundY + 6 + Math.round(depth * (seaY - groundY - 14)));
+      sp.position.set(rng() * W, groundY + 4 + Math.round(depth * Math.max(6, walkY - groundY - 6)));
       sp.scale.set(0.85 + depth * 0.55); sp.baseScale = sp.scale.x;
       sp.vx = (6 + rng() * 7) * (rng() < 0.5 ? -1 : 1); sp.scale.x = sp.vx > 0 ? sp.baseScale : -sp.baseScale;
       sp.variant = v; sp.pause = 0; this.scene.addChild(sp); this.peds.push(sp);
