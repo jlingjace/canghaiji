@@ -1,5 +1,5 @@
 /* 港口场景：运行时生成的像素街景 + 建筑热区 + 路人 / 海鸥 / 旗子 / 烟 / 浪花动画（全部原创） */
-import { Assets, Container, Sprite, Graphics, Text } from 'pixi.js';
+import { Assets, ColorMatrixFilter, Container, Sprite, Graphics, Text } from 'pixi.js';
 import { S, hooks, port, zone, zoneLeader } from './game.js';
 import { FACTION_COLOR } from './data.js';
 import { canvasTexture, pixelsToCanvas } from './pixelart.js';
@@ -81,10 +81,13 @@ export class PortScene {
   constructor(app, shipTex) {
     this.app = app; this.shipTex = shipTex;
     this.root = new Container(); this.root.visible = false;
+    // world 这一层整体参与昼夜调色；文字标签留在外面，免得夜里跟着变暗看不清
+    this.world = new Container(); this.root.addChild(this.world);
     // 手绘背景板不能放进 this.scene——那一层带着 K 倍整数缩放，绘画会被放成马赛克
-    this.artLayer = new Container(); this.artLayer.eventMode = 'none'; this.root.addChild(this.artLayer);
-    this.scene = new Container(); this.root.addChild(this.scene);
+    this.artLayer = new Container(); this.artLayer.eventMode = 'none'; this.world.addChild(this.artLayer);
+    this.scene = new Container(); this.world.addChild(this.scene);
     this.labels = new Container(); this.labels.eventMode = 'none'; this.root.addChild(this.labels);
+    this.grade = new ColorMatrixFilter(); this.graded = false;
     this.pid = null; this.size = ''; this.t = 0; this.hover = null;
     this.pedTex = SHIRTS.map(c => PED_ROWS.map(r => canvasTexture(pixelsToCanvas(r, { h: '#3a2a1c', s: '#e9bd98', c, p: '#2a3a5a', b: '#3a2412' }, 1))));
     this.gullTex = GULL_ROWS.map(r => canvasTexture(pixelsToCanvas(r, { w: '#f4f4f4', b: '#888' }, 1)));
@@ -443,7 +446,11 @@ export class PortScene {
 
     /* 窗灯（夜晚） */
     this.glow = new Graphics();
-    for (const wnd of this.windows) this.glow.rect(wnd.x, wnd.y, wnd.w, wnd.h).fill(0xffd27a);
+    for (const wnd of this.windows) {                       // 先铺两层柔光，再画灯芯，夜里才有「透出来」的感觉
+      this.glow.rect(wnd.x - 3, wnd.y - 3, wnd.w + 6, wnd.h + 6).fill({ color: 0xffc866, alpha: 0.16 });
+      this.glow.rect(wnd.x - 1, wnd.y - 1, wnd.w + 2, wnd.h + 2).fill({ color: 0xffd27a, alpha: 0.5 });
+      this.glow.rect(wnd.x, wnd.y, wnd.w, wnd.h).fill(0xffe2a0);
+    }
     this.glow.alpha = 0; this.glow.eventMode = 'none'; this.scene.addChild(this.glow);
 
     /* 云（手绘天空自带云，不再叠）*/
@@ -728,6 +735,16 @@ export class PortScene {
     this.smoke = this.smoke.filter(s => { if (s.life <= 0) { s.g.destroy(); return false; } return true; });
     // 昼夜
     const d = (Math.cos(S.dayAcc * Math.PI * 2) + 1) / 2, dusk = 1 - Math.abs(2 * d - 1);
-    this.night.alpha = 0.55 * Math.pow(d, 1.6); this.warm.alpha = 0.22 * dusk * dusk; this.glow.alpha = clamp(d * 1.2 - 0.2, 0, 1);
+    // 手绘背景压一块半透明深蓝会糊成一片，改成「调色矩阵压暗去饱和 + 薄蓝罩定色调」
+    this.night.alpha = 0.26 * Math.pow(d, 1.5);
+    this.warm.alpha = 0.20 * dusk * dusk;
+    this.glow.alpha = clamp(d * 1.5 - 0.15, 0, 1);
+    const wantGrade = d > 0.03;
+    if (wantGrade) {
+      const gm = this.grade; gm.reset();
+      gm.saturate(-0.55 * d, true);
+      gm.brightness(1 - 0.40 * d, true);
+      if (!this.graded) { this.world.filters = [gm]; this.graded = true; }
+    } else if (this.graded) { this.world.filters = null; this.graded = false; }
   }
 }
