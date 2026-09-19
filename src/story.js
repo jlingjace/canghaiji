@@ -492,7 +492,7 @@ export const STORY = {
       "intro": [
         {
           "who": "salim",
-          "text": "沧海新贵，{captain}船长！请坐。哈瓦那的茶不好，是从泉州运来的——但金沙的诚意是本地的。"
+          "text": "沧海新贵，{captain}船长！请坐。哈瓦那的茶不好，是从月港运来的——但金沙的诚意是本地的。"
         },
         {
           "who": "salim",
