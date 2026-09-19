@@ -542,13 +542,13 @@ function renderJournal() {
     for (const pid in S.mem) { const pr = S.mem[pid].prices[gd.id]; if (pr == null) continue;
       if (!lo || pr < lo.pr) lo = { pid, pr }; if (!hi || pr > hi.pr) hi = { pid, pr }; }
     if (!lo) return '';
-    const spread = hi.pr * 0.9 - lo.pr;
+    const spread = g.sellFromSpot(port(hi.pid), hi.pr) - g.buyPrice(port(lo.pid), gd.id);
     return `<tr><td>${gd.name}</td><td>${port(lo.pid).name} <span class="muted">${lo.pr}</span></td><td>${port(hi.pid).name} <span class="muted">${hi.pr}</span></td><td class="r ${spread > 0 ? 'good' : 'muted'}">${spread > 0 ? '+' + Math.round(spread) : '-'}</td></tr>`;
   }).join('');
   const logs = S.log.map(l => `<div><span class="d">${g.dateStr(l.d)}</span><span class="${l.cls}">${l.msg}</span></div>`).join('');
   return `<h2>航海志</h2><h3>已知价格（按到访 / 情报记录）</h3>
     <table><thead><tr><th>商品</th><th>最低价港口</th><th>最高价港口</th><th class="r">单件毛利*</th></tr></thead><tbody>${rows}</tbody></table>
-    <p class="muted" style="font-size:12px">*按最高价的 90% 卖出估算，且价格随时间波动，仅供参考。到访过 ${Object.keys(S.mem).length}/${PORTS.length} 个港口。</p>
+    <p class="muted" style="font-size:12px">*用最低价港的买入价与最高价港的卖出价估算，已计入买卖价差；实际成交还要承担价格冲击（买得多均价更高），量大时利润会低于这个数。价格随时间波动，仅供参考。到访过 ${Object.keys(S.mem).length}/${PORTS.length} 个港口。</p>
     <h3>日志</h3><div class="log">${logs}</div>`;
 }
 
