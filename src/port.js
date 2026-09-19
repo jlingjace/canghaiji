@@ -7,15 +7,20 @@ import { seeded, hash, clamp } from './util.js';
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
 const BASE_H = 200;
 
-/* 六大海域的建筑风格 */
+/* 各地区建筑风格（由 ZONES[].style 选择） */
 const STYLES = {
-  west: { wall: '#e8dcc0', wall2: '#cbbfa0', beam: '#5a3a22', roof: '#9a3f2e', roof2: '#6e2b20', roofStyle: 'gable', ground: '#8a8a7a', ground2: '#6f6f62', hill: '#3f6a48', hill2: '#2f5238', sky: ['#4f8fd0', '#a8d4f0'] },
-  north: { wall: '#6b4a2a', wall2: '#553a20', beam: '#2e1c0e', roof: '#5a6a7a', roof2: '#3e4a56', roofStyle: 'steep', ground: '#767676', ground2: '#5a5a5a', hill: '#4a6a5a', hill2: '#36503f', sky: ['#5f88ae', '#c4d6e6'] },
-  east: { wall: '#f0ece0', wall2: '#d6d1c0', beam: '#7a3a2a', roof: '#2f6a5a', roof2: '#214a40', roofStyle: 'curved', ground: '#9a8a7a', ground2: '#7a6a5a', hill: '#4a7a4a', hill2: '#365c36', sky: ['#7fb4e6', '#f0d0dc'] },
-  south: { wall: '#d9b077', wall2: '#b9925c', beam: '#7a5a3a', roof: '#8a7a3a', roof2: '#66582a', roofStyle: 'thatch', ground: '#c8b07a', ground2: '#a68e5a', hill: '#3f8a4a', hill2: '#2f6a38', sky: ['#3fa8e0', '#b8ecf6'] },
-  pearl: { wall: '#e6eef7', wall2: '#c4d2e2', beam: '#6a5a8a', roof: '#7a5ab8', roof2: '#563d92', roofStyle: 'dome', ground: '#a8a8b8', ground2: '#86869a', hill: '#5a7a8a', hill2: '#425c6a', sky: ['#7a92e0', '#e0ccf4'] },
-  gold: { wall: '#6a5a4a', wall2: '#524436', beam: '#f2c14e', roof: '#8a6a2a', roof2: '#64491c', roofStyle: 'flat', ground: '#9a8a6a', ground2: '#78684c', hill: '#8a7a4a', hill2: '#6a5c36', sky: ['#e08a4e', '#f6dc9a'] },
+  iberian: { wall: '#e8dcc0', wall2: '#cbbfa0', beam: '#5a3a22', roof: '#9a3f2e', roof2: '#6e2b20', roofStyle: 'gable', ground: '#8a8a7a', ground2: '#6f6f62', hill: '#3f6a48', hill2: '#2f5238', sky: ['#4f8fd0', '#a8d4f0'] },
+  northern: { wall: '#6b4a2a', wall2: '#553a20', beam: '#2e1c0e', roof: '#5a6a7a', roof2: '#3e4a56', roofStyle: 'steep', ground: '#767676', ground2: '#5a5a5a', hill: '#4a6a5a', hill2: '#36503f', sky: ['#5f88ae', '#c4d6e6'] },
+  mediterranean: { wall: '#f0ece0', wall2: '#d6d1c0', beam: '#8a6a3a', roof: '#b4653a', roof2: '#8a482a', roofStyle: 'flat', ground: '#c0b49a', ground2: '#a09274', hill: '#7a8a5a', hill2: '#5c6a42', sky: ['#4fa0e0', '#cfe8f6'] },
+  ottoman: { wall: '#e6dcc8', wall2: '#c8bda6', beam: '#6a5a3a', roof: '#8a7a5a', roof2: '#6a5c42', roofStyle: 'dome', ground: '#b0a488', ground2: '#8e836a', hill: '#8a8a5a', hill2: '#6a6a42', sky: ['#6fb0e0', '#f0dcc0'] },
+  westafrican: { wall: '#d9b077', wall2: '#b9925c', beam: '#7a5a3a', roof: '#8a7a3a', roof2: '#66582a', roofStyle: 'thatch', ground: '#c8b07a', ground2: '#a68e5a', hill: '#3f8a4a', hill2: '#2f6a38', sky: ['#3fa8e0', '#b8ecf6'] },
+  indian: { wall: '#f0e0c8', wall2: '#d4c2a4', beam: '#8a4a2a', roof: '#a85a3a', roof2: '#80402a', roofStyle: 'curved', ground: '#c0a888', ground2: '#9c8666', hill: '#5a8a4a', hill2: '#446a38', sky: ['#6fbce0', '#f6e0c0'] },
+  seasia: { wall: '#d8c08a', wall2: '#b8a06c', beam: '#6a4a2a', roof: '#7a6a3a', roof2: '#5a4c28', roofStyle: 'thatch', ground: '#b8a878', ground2: '#96885c', hill: '#2f8a4a', hill2: '#236a38', sky: ['#3fb0e0', '#c8f0f6'] },
+  eastasia: { wall: '#f0ece0', wall2: '#d6d1c0', beam: '#7a3a2a', roof: '#2f6a5a', roof2: '#214a40', roofStyle: 'curved', ground: '#9a8a7a', ground2: '#7a6a5a', hill: '#4a7a4a', hill2: '#365c36', sky: ['#7fb4e6', '#f0d0dc'] },
+  colonial: { wall: '#e6eef7', wall2: '#c4d2e2', beam: '#6a5a4a', roof: '#a85a4a', roof2: '#823f34', roofStyle: 'gable', ground: '#b8b0a0', ground2: '#968e80', hill: '#4a8a5a', hill2: '#356a42', sky: ['#4fbce6', '#d8f0f8'] },
+  brazil: { wall: '#f0dcc0', wall2: '#d2bd9e', beam: '#7a5a3a', roof: '#b06a3a', roof2: '#8a4e2a', roofStyle: 'flat', ground: '#c4a880', ground2: '#a08a64', hill: '#2f8a4a', hill2: '#236a38', sky: ['#3fa8e0', '#ffe0b0'] },
 };
+const styleOf = p => STYLES[zone(p.zone)?.style] || STYLES.iberian;
 const BUILDINGS = [
   { key: 'market', name: '货栈', ptab: 'market' },
   { key: 'tavern', name: '酒馆', ptab: 'tavern' },
@@ -80,7 +85,7 @@ export class PortScene {
     this.scene.removeChildren().forEach(c => c.destroy({ children: true }));
     this.labels.removeChildren().forEach(c => c.destroy({ children: true }));
     this.scene.scale.set(K);
-    const p = port(this.pid), st = STYLES[p.zone], rng = seeded(hash(p.id) + 11);
+    const p = port(this.pid), st = styleOf(p), rng = seeded(hash(p.id) + 11);
     const horizon = Math.round(H * 0.42), groundY = Math.round(H * 0.70), seaY = Math.round(H * 0.84);
     this.groundY = groundY; this.seaY = seaY;
 
@@ -123,7 +128,7 @@ export class PortScene {
     });
     // 路灯 / 木箱 / 树
     for (let lx = 14; lx < W; lx += Math.round(W / 4)) { px(lx, seaY - 16, 1, 13, '#2a2a2a'); px(lx - 1, seaY - 18, 3, 3, '#f2c14e'); px(lx - 2, seaY - 19, 5, 1, '#2a2a2a'); }
-    const tree = (tx, ty) => { if (p.zone === 'south' || p.zone === 'gold') { px(tx, ty - 14, 2, 14, '#7a5a3a'); for (const [dx, dy] of [[-6, -14], [4, -15], [-3, -18], [3, -19], [-7, -11], [6, -11]]) px(tx + dx, ty + dy, 5, 2, '#2f8a4a'); } else { px(tx, ty - 10, 2, 10, '#5a3a22'); px(tx - 4, ty - 18, 10, 9, '#2c6a3a'); px(tx - 2, ty - 21, 6, 4, '#2c6a3a'); px(tx - 3, ty - 16, 3, 3, '#3f8a4a'); } };
+    const tree = (tx, ty) => { if (st.roofStyle === 'thatch' || st === STYLES.brazil) { px(tx, ty - 14, 2, 14, '#7a5a3a'); for (const [dx, dy] of [[-6, -14], [4, -15], [-3, -18], [3, -19], [-7, -11], [6, -11]]) px(tx + dx, ty + dy, 5, 2, '#2f8a4a'); } else { px(tx, ty - 10, 2, 10, '#5a3a22'); px(tx - 4, ty - 18, 10, 9, '#2c6a3a'); px(tx - 2, ty - 21, 6, 4, '#2c6a3a'); px(tx - 3, ty - 16, 3, 3, '#3f8a4a'); } };
     tree(slots[1] - 8, groundY - 1); tree(W - 6, groundY - 1);
 
     this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg);
@@ -187,9 +192,9 @@ export class PortScene {
   drawBuilding(x, px, bx, by, w, h, st, kind, rng, p) {
     const top = by - h;
     px(bx, top, w, h, st.wall); px(bx + Math.round(w * 0.7), top, Math.round(w * 0.3), h, st.wall2);
-    if (p.zone === 'west') { for (let i = 0; i <= w; i += Math.max(6, Math.round(w / 4))) px(bx + Math.min(i, w - 1), top, 1, h, st.beam); px(bx, top + Math.round(h / 2), w, 1, st.beam); px(bx, top, w, 1, st.beam); }
-    if (p.zone === 'gold') { for (let yy = top + 2; yy < by; yy += 4) for (let xx = bx + ((yy / 4) % 2 ? 2 : 0); xx < bx + w; xx += 6) px(xx, yy, 4, 1, st.wall2); }
-    if (p.zone === 'north') { for (let yy = top + 3; yy < by; yy += 3) px(bx, yy, w, 1, st.beam); }
+    if (st.roofStyle === 'gable') { for (let i = 0; i <= w; i += Math.max(6, Math.round(w / 4))) px(bx + Math.min(i, w - 1), top, 1, h, st.beam); px(bx, top + Math.round(h / 2), w, 1, st.beam); px(bx, top, w, 1, st.beam); }
+    if (st === STYLES.ottoman || st === STYLES.mediterranean) { for (let yy = top + 2; yy < by; yy += 4) for (let xx = bx + ((yy / 4) % 2 ? 2 : 0); xx < bx + w; xx += 6) px(xx, yy, 4, 1, st.wall2); }
+    if (st.roofStyle === 'steep') { for (let yy = top + 3; yy < by; yy += 3) px(bx, yy, w, 1, st.beam); }
     // 窗
     const rows = h > 40 ? 3 : 2, cols = Math.max(2, Math.floor(w / 9));
     for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {

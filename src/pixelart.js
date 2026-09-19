@@ -1,6 +1,8 @@
 /* 运行时生成的像素贴图（全部原创）。换成真 PNG 素材时只需把这里的函数改成 Assets.load。 */
 import { Texture } from 'pixi.js';
 import { seeded } from './util.js';
+import * as geo from './geo.js';
+import * as nav from './nav.js';
 
 export function canvasTexture(canvas) {
   const t = Texture.from(canvas);
@@ -110,45 +112,57 @@ const PORT_ROWS = [
 export function makePortIcon() { return canvasTexture(pixelsToCanvas(PORT_ROWS, PORT_PAL, 1)); }
 
 /**
- * 陆地层：把 SVG path 栅格化成 8 逻辑单位的地块，画草地、沙岸、浅滩与树木。
- * 输出 canvas 尺寸 = 逻辑尺寸 × scale，1 逻辑单位 = 1 个"像素"。
+ * 真实世界陆地层：由导航栅格生成草地 / 沙岸 / 浅滩 / 树木的像素图。
+ * 直接写 ImageData，避免几十万次 fillRect。
  */
-export function makeLandCanvas(paths, W, H, scale) {
-  const T = 8, cols = Math.ceil(W / T), rows = Math.ceil(H / T);
-  const p2 = paths.map(d => new Path2D(d));
-  const probe = document.createElement('canvas').getContext('2d');
-  const land = new Uint8Array(cols * rows);
-  const at = (c, r) => (c < 0 || r < 0 || c >= cols || r >= rows) ? 1 : land[r * cols + c];
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const cx = c * T + T / 2, cy = r * T + T / 2;
-    land[r * cols + c] = p2.some(p => probe.isPointInPath(p, cx, cy)) ? 1 : 0;
+export function makeWorldLandCanvas() {
+  const { MAP_W, MAP_H } = geo;
+  const { NAV, NC, NR } = nav;
+  const mask = nav.buildMask();
+  const P = NAV;                               // 1 逻辑单位 = 1 像素，每格输出 NAV×NAV 像素
+  const cv = document.createElement('canvas'); cv.width = MAP_W; cv.height = MAP_H;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(MAP_W, MAP_H);
+  const d = img.data;
+  const rng = seeded(20260919);
+  const C = {
+    grass: [63, 122, 74], grassD: [53, 104, 63], grassL: [78, 140, 88],
+    sand: [214, 195, 138], sandD: [191, 169, 110],
+    shallow: [47, 127, 165], shallowL: [58, 143, 181],
+    tree: [44, 90, 53], treeD: [31, 68, 39],
+  };
+  const put = (x, y, col) => {
+    if (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) return;
+    const i = (y * MAP_W + x) * 4;
+    d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; d[i + 3] = 255;
+  };
+  const at = (c, r) => (c < 0 || r < 0 || c >= NC || r >= NR) ? 0 : mask[r * NC + c];
+  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
+    const land = at(c, r);
+    const n = at(c, r - 1), s2 = at(c, r + 1), w = at(c - 1, r), e = at(c + 1, r);
+    const ox = c * P, oy = r * P;
+    if (!land) {
+      let near = 0;
+      for (let dr = -1; dr <= 1 && !near; dr++) for (let dc = -1; dc <= 1; dc++) if (at(c + dc, r + dr)) { near = 1; break; }
+      if (!near) continue;
+      for (let y = 0; y < P; y++) for (let x = 0; x < P; x++) put(ox + x, oy + y, rng() < 0.22 ? C.shallowL : C.shallow);
+      continue;
+    }
+    for (let y = 0; y < P; y++) for (let x = 0; x < P; x++) {
+      let col = C.grass;
+      const rv = rng();
+      if (rv < 0.16) col = C.grassD; else if (rv < 0.24) col = C.grassL;
+      if (!n && y === 0) col = C.sand; else if (!n && y === 1) col = C.sandD;
+      if (!s2 && y === P - 1) col = C.sand; else if (!s2 && y === P - 2) col = C.sandD;
+      if (!w && x === 0) col = C.sand; else if (!w && x === 1) col = C.sandD;
+      if (!e && x === P - 1) col = C.sand; else if (!e && x === P - 2) col = C.sandD;
+      put(ox + x, oy + y, col);
+    }
+    if (n && s2 && w && e && rng() < 0.30) {
+      const tx = ox + 1 + Math.floor(rng() * (P - 2)), ty = oy + 1 + Math.floor(rng() * (P - 2));
+      put(tx, ty, C.tree); put(tx - 1, ty, C.tree); put(tx, ty - 1, C.treeD);
+    }
   }
-  const cv = document.createElement('canvas'); cv.width = W * scale; cv.height = H * scale;
-  const x = cv.getContext('2d'); x.imageSmoothingEnabled = false;
-  const px = (ux, uy, col, w = 1, h = 1) => { x.fillStyle = col; x.fillRect(ux * scale, uy * scale, w * scale, h * scale); };
-  const rng = seeded(7);
-  const grass = '#3f7a4a', grassD = '#35683f', sand = '#d6c38a', sandD = '#bfa96e', shallow = '#2f7fa5', shallowL = '#3a8fb5', tree = '#2c5a35', treeD = '#1f4427';
-  // 浅滩：紧邻陆地的水域
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    if (at(c, r)) continue;
-    let near = false;
-    for (let dr = -1; dr <= 1 && !near; dr++) for (let dc = -1; dc <= 1; dc++) if ((dr || dc) && at(c + dc, r + dr)) { near = true; break; }
-    if (!near) continue;
-    px(c * T, r * T, shallow, T, T);
-    for (let i = 0; i < 3; i++) px(c * T + Math.floor(rng() * T), r * T + Math.floor(rng() * T), shallowL);
-  }
-  // 陆地
-  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    if (!at(c, r)) continue;
-    const ux = c * T, uy = r * T;
-    px(ux, uy, grass, T, T);
-    for (let i = 0; i < 4; i++) px(ux + Math.floor(rng() * T), uy + Math.floor(rng() * T), grassD);
-    if (!at(c, r - 1)) { px(ux, uy, sand, T, 2); px(ux, uy + 2, sandD, T, 1); }
-    if (!at(c, r + 1)) { px(ux, uy + T - 2, sand, T, 2); px(ux, uy + T - 3, sandD, T, 1); }
-    if (!at(c - 1, r)) { px(ux, uy, sand, 2, T); px(ux + 2, uy, sandD, 1, T); }
-    if (!at(c + 1, r)) { px(ux + T - 2, uy, sand, 2, T); px(ux + T - 3, uy, sandD, 1, T); }
-    const inland = at(c - 1, r) && at(c + 1, r) && at(c, r - 1) && at(c, r + 1);
-    if (inland && rng() < 0.35) { const tx = ux + 1 + Math.floor(rng() * 4), ty = uy + 1 + Math.floor(rng() * 3); px(tx, ty, tree, 3, 3); px(tx + 1, ty + 3, treeD, 1, 1); px(tx + 1, ty, treeD, 1, 1); }
-  }
+  ctx.putImageData(img, 0, 0);
   return cv;
 }

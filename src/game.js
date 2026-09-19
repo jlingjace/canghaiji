@@ -1,6 +1,8 @@
 /* 游戏状态与规则逻辑（与表现层解耦；表现层通过 hooks 注入） */
 import { GOODS, G, SHIP_TYPES, ZONES, RIVALS, FACTION_NAME, PORTS, SHIP_NAMES, CHARS, LINES } from './data.js';
 import { rand, randInt, pick, clamp, fmt, hash } from './util.js';
+import { projX, projY, greatCircleKm } from './geo.js';
+import { START_PORT, VICTORY_ZONES } from './data.js';
 
 export let S = null;   // 存档状态
 export let B = null;   // 战斗状态
@@ -34,24 +36,29 @@ export function nextShipName() {
 
 export function newGame() {
   S = {
-    gold: 3000, day: 0, pos: 'baifan', ship: { x: 120, y: 130 }, dest: null, voyage: null, dayAcc: 0.3, weather: { type: 'clear', days: 0 },
+    gold: 3000, day: 0, pos: START_PORT, ship: { x: projX(port(START_PORT).lon), y: projY(port(START_PORT).lat) }, dest: null, voyage: null, dayAcc: 0.3, weather: { type: 'clear', days: 0 },
     fleet: [], cargo: {}, supplies: 30, drift: {}, stock: {}, share: {}, dev: {}, mem: {}, log: [],
     captain: null, tab: 'port', ptab: 'market', won: false, stats: { trades: 0, battles: 0, wins: 0 },
   };
   S.fleet.push(mkShip('sloop', '初雪号', { cannons: 4, crew: 15 }));
+  S.rep = { whale: 0, redsail: 0, goldsand: 0, pirate: 0, free: 10 };
   for (const p of PORTS) {
     S.drift[p.id] = {}; S.stock[p.id] = {}; S.dev[p.id] = 0;
     for (const g of GOODS) { S.drift[p.id][g.id] = rand(0.85, 1.15); S.stock[p.id][g.id] = 0; }
   }
-  S.share = {
-    west: { player: 15, whale: 35, redsail: 30, goldsand: 20 },
-    north: { player: 0, whale: 70, redsail: 15, goldsand: 15 },
-    east: { player: 0, whale: 30, redsail: 30, goldsand: 40 },
-    south: { player: 0, whale: 15, redsail: 70, goldsand: 15 },
-    pearl: { player: 0, whale: 35, redsail: 35, goldsand: 30 },
-    gold: { player: 0, whale: 15, redsail: 15, goldsand: 70 },
-  };
-  remember('baifan');
+  // 势力份额：按各海域的大本营归属生成
+  S.share = {};
+  const startZone = port(START_PORT).zone;
+  for (const z of ZONES) {
+    const home = RIVALS.find(r => r.home === z.id);
+    const sh = { player: z.id === startZone ? 12 : 0, whale: 0, redsail: 0, goldsand: 0 };
+    let rest = 100 - sh.player;
+    if (home) { sh[home.id] = Math.round(rest * 0.62); rest -= sh[home.id]; }
+    const others = RIVALS.filter(r => !home || r.id !== home.id);
+    others.forEach((r, i) => { const v = i === others.length - 1 ? rest : Math.round(rest / others.length); sh[r.id] += v; rest -= v; });
+    S.share[z.id] = sh;
+  }
+  remember(START_PORT);
   log('你在白帆港继承了一艘小帆船和 3,000 金币。目标：在六大海域都取得过半的势力份额，称霸沧海。', 'gold');
 }
 
@@ -84,7 +91,7 @@ function normalizeShare(zid) { const sh = S.share[zid]; const tot = Object.value
 export function zoneLeader(zid) { const sh = S.share[zid]; let best = null; for (const k in sh) if (!best || sh[k] > sh[best]) best = k; return best; }
 export function checkWin() {
   if (S.won) return;
-  if (ZONES.every(z => S.share[z.id].player >= 50)) {
+  if (ZONES.filter(z => S.share[z.id].player >= 50).length >= VICTORY_ZONES) {
     S.won = true; log('六大海域尽归你的旗下，你成为了沧海之主！', 'gold');
     hooks.showModal(`<h2>称霸沧海</h2><p>${dateStr()}，你的商会在六大海域的份额全部过半。海图上再无对手，你的名字将被写进每一座港口的年鉴。</p>
       <p class="muted">航行 ${Math.floor(S.day / 360)} 年 ${Math.floor(S.day % 360 / 30)} 个月 · 交易 ${S.stats.trades} 次 · 海战 ${S.stats.battles} 场（胜 ${S.stats.wins}）</p>
@@ -137,10 +144,12 @@ export function fleetSpeed() {
   if (S.fleet.some(sh => sh.crew < T(sh).crew * 0.3)) s -= 1;
   return Math.max(2, s);
 }
-export const dailySupply = () => Math.max(1, Math.ceil(totalCrew() / 10));
+export const dailySupply = () => Math.max(1, Math.ceil(totalCrew() / 20));
 /** 1 天航程对应的逻辑距离 */
-export const dayDistance = () => fleetSpeed() * 10;
-export function voyageDays(pid) { const b = port(pid); return Math.max(1, Math.ceil(Math.hypot(S.ship.x - b.x, S.ship.y - b.y) / dayDistance())); }
+/** 1 天航程对应的逻辑距离（真实世界比例下，横渡大西洋约 20 天） */
+export const dayDistance = () => fleetSpeed() * 8;
+export function voyageDays(pid) { const b = port(pid); return Math.max(1, Math.ceil(Math.hypot(S.ship.x - projX(b.lon), S.ship.y - projY(b.lat)) / dayDistance())); }
+export function portKm(pid) { const b = port(pid); return greatCircleKm(b.lon, b.lat, port(S.pos).lon, port(S.pos).lat); }
 export function crewShortage() { return S.fleet.filter(sh => sh.crew < Math.ceil(T(sh).crew * 0.2)); }
 
 export function loseCargoFor(sh) {

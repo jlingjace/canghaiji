@@ -1,14 +1,14 @@
-/* 剧情与任务数据（原创，由多智能体设计工作流合成，人工校验 id）。
+/* 剧情与任务数据（原创，由多智能体设计工作流合成；港口/海域已迁移到真实世界地图）。
    字段说明见 quests.js；who 可用 'captain' 指代玩家船长，文本中 {captain} 会被替换。 */
 export const STORY = {
   "title": "沧海纪·海不分家",
-  "premise": "{captain} 在白帆港继承了老船主的初雪号和一本被撕去最后一页的账本，账上每月一笔「护航费」在他失踪前半年戛然而止，而大副阿海记得那夜天上一颗星都没少。追查之下，三大商会以「分海约」瓜分沧海、用护航费供养海盗巴罗清除独立商人的黑幕逐层揭开：傲慢的赫克托并非凶手，圆滑的萨利姆只是账房，优雅的艾丽丝却亲手签过那张要命的单子。真正把老船主卖给巴罗的，是无处不在、事事按章的岑港务长——那一成「港务附加」买下了一场灭口。玩家在风语城会审废除密约、于骸湾击沉巴罗后，三家又想重新分海，而账本扉页那句「海不分家」，成了玩家一统六海的唯一答案。",
+  "premise": "{captain} 在里斯本继承了老船主的初雪号和一本被撕去最后一页的账本，账上每月一笔「护航费」在他失踪前半年戛然而止，而大副阿海记得那夜天上一颗星都没少。追查之下，三大商会以「分海约」瓜分沧海、用护航费供养海盗巴罗清除独立商人的黑幕逐层揭开：傲慢的赫克托并非凶手，圆滑的萨利姆只是账房，优雅的艾丽丝却亲手签过那张要命的单子。真正把老船主卖给巴罗的，是无处不在、事事按章的岑港务长——那一成「港务附加」买下了一场灭口。玩家在果阿会审废除密约、于骸湾击沉巴罗后，三家又想重新分海，而账本扉页那句「海不分家」，成了玩家一统六海的唯一答案。",
   "newChars": [
     {
       "key": "guyan",
       "name": "顾砚",
       "title": "前蓝鲸账房",
-      "role": "替蓝鲸商会管过十年账、知晓分海约分账结构的落魄账房先生，躲在银湖港酗酒，胆小却是真相的第一把钥匙。",
+      "role": "替蓝鲸商会管过十年账、知晓分海约分账结构的落魄账房先生，躲在阿姆斯特丹酗酒，胆小却是真相的第一把钥匙。",
       "portrait": {
         "skin": "#e6c2a0",
         "hair": "#4a3a2a",
@@ -60,7 +60,7 @@ export const STORY = {
     },
     {
       "who": "ahai",
-      "text": "港里都说归雁号沉在龙骨岛外的风暴里。可那晚我在桅顶看了一夜——天上一颗星都没少。"
+      "text": "港里都说归雁号沉在澳门外的风暴里。可那晚我在桅顶看了一夜——天上一颗星都没少。"
     },
     {
       "who": "ahai",
@@ -68,7 +68,7 @@ export const STORY = {
     },
     {
       "who": "ahai",
-      "text": "先别急着查，船长。船要吃饭，人也要吃饭。老爷子的路子是从铁锚城跑起来的，咱也从那儿开始。"
+      "text": "先别急着查，船长。船要吃饭，人也要吃饭。老爷子的路子是从塞维利亚跑起来的，咱也从那儿开始。"
     }
   ],
   "main": [
@@ -84,7 +84,7 @@ export const STORY = {
       "intro": [
         {
           "who": "ahai",
-          "text": "账本头几页记的是老爷子最早的航线：在白帆港买布，运到铁锚城去卖。赚得少，但稳。"
+          "text": "账本头几页记的是老爷子最早的航线：在里斯本买布，运到塞维利亚去卖。赚得少，但稳。"
         },
         {
           "who": "qian",
@@ -108,26 +108,26 @@ export const STORY = {
         },
         {
           "kind": "visit",
-          "port": "tiemao",
-          "label": "到达铁锚城"
+          "port": "sevilla",
+          "label": "到达塞维利亚"
         },
         {
           "kind": "sell",
           "good": "cloth",
           "qty": 20,
-          "zone": "west",
-          "label": "在西洋各港累计卖出 20 布匹"
+          "zone": "iberia",
+          "label": "在伊比利亚海岸各港累计卖出 20 布匹"
         }
       ],
       "turnIn": null,
       "outro": [
         {
           "who": "ahai",
-          "text": "账对上了。老爷子当年也是这么一港一港跑的……我记得他每到雾角，都要去红姨的酒馆坐一晚。"
+          "text": "账对上了。老爷子当年也是这么一港一港跑的……我记得他每到丰沙尔，都要去红姨的酒馆坐一晚。"
         },
         {
           "who": "ahai",
-          "text": "红姨跟老爷子熟，比我还熟。护航费的事，她要是愿意开口，肯定知道。去雾角的酒馆找她吧。"
+          "text": "红姨跟老爷子熟，比我还熟。护航费的事，她要是愿意开口，肯定知道。去丰沙尔的酒馆找她吧。"
         }
       ],
       "reward": {
@@ -137,9 +137,9 @@ export const STORY = {
     {
       "id": "m02_escort_fee",
       "type": "main",
-      "title": "雾角的护航费",
+      "title": "丰沙尔的护航费",
       "giver": "hong",
-      "port": "wujiao",
+      "port": "funchal",
       "prereq": {
         "quests": [
           "m01_old_ledger"
@@ -160,7 +160,7 @@ export const STORY = {
         },
         {
           "who": "hong",
-          "text": "他那条归雁号是灰岩堡的木叔造的。出事前他还去灰岩堡改过初雪号，说要在龙骨下加个'夹层'。"
+          "text": "他那条归雁号是伦敦的木叔造的。出事前他还去伦敦改过初雪号，说要在龙骨下加个'夹层'。"
         },
         {
           "who": "hong",
@@ -172,8 +172,8 @@ export const STORY = {
           "kind": "deliver",
           "good": "wine",
           "qty": 20,
-          "port": "huiyan",
-          "label": "把 20 桶酒送到灰岩堡"
+          "port": "london",
+          "label": "把 20 桶酒送到伦敦"
         },
         {
           "kind": "explore",
@@ -185,11 +185,11 @@ export const STORY = {
       "outro": [
         {
           "who": "mu",
-          "text": "雾角的酒……红姨还记着。归雁号是我造的，初雪号的夹层也是我改的。老船主没说装什么，我也没问。"
+          "text": "丰沙尔的酒……红姨还记着。归雁号是我造的，初雪号的夹层也是我改的。老船主没说装什么，我也没问。"
         },
         {
           "who": "mu",
-          "text": "夹层在龙骨下面。来，我给你开——空的。只剩一枚铜印，蓝鲸商会的，还有半张银湖港货栈的收据。"
+          "text": "夹层在龙骨下面。来，我给你开——空的。只剩一枚铜印，蓝鲸商会的，还有半张阿姆斯特丹货栈的收据。"
         },
         {
           "who": "ahai",
@@ -197,7 +197,7 @@ export const STORY = {
         },
         {
           "who": "mu",
-          "text": "银湖港账房，姓顾。原先是蓝鲸的账房先生，后来不知怎么，整天在银湖港喝酒。"
+          "text": "阿姆斯特丹账房，姓顾。原先是蓝鲸的账房先生，后来不知怎么，整天在阿姆斯特丹喝酒。"
         }
       ],
       "reward": {
@@ -207,9 +207,9 @@ export const STORY = {
     {
       "id": "m03_clerk_of_yinhu",
       "type": "main",
-      "title": "银湖港的账房先生",
+      "title": "阿姆斯特丹的账房先生",
       "giver": "guyan",
-      "port": "yinhu",
+      "port": "amsterdam",
       "prereq": {
         "quests": [
           "m02_escort_fee"
@@ -222,11 +222,11 @@ export const STORY = {
         },
         {
           "who": "guyan",
-          "text": "我叫顾砚，替蓝鲸管过十年账。你手里那枚印是老船主自己的——他当年是蓝鲸的西洋总管。"
+          "text": "我叫顾砚，替蓝鲸管过十年账。你手里那枚印是老船主自己的——他当年是蓝鲸的伊比利亚海岸总管。"
         },
         {
           "who": "guyan",
-          "text": "三家商会分海：蓝鲸守北海，红帆守南洋，金沙守黄金海。护航费三家分账，海盗巴罗替他们清场。"
+          "text": "三家商会分海：蓝鲸守北海，红帆守南洋，金沙守加勒比海。护航费三家分账，海盗巴罗替他们清场。"
         },
         {
           "who": "guyan",
@@ -242,7 +242,7 @@ export const STORY = {
           "kind": "sell",
           "good": "cloth",
           "qty": 30,
-          "zone": "north",
+          "zone": "northeu",
           "label": "向北海各港累计卖出 30 布匹"
         },
         {
@@ -251,7 +251,7 @@ export const STORY = {
           "label": "持有 6,000 金币"
         }
       ],
-      "turnIn": "yinhu",
+      "turnIn": "amsterdam",
       "outro": [
         {
           "who": "guyan",
@@ -259,7 +259,7 @@ export const STORY = {
         },
         {
           "who": "guyan",
-          "text": "那一成给谁的，我十年都没查出来。只知道每年腊月在风语城结一次账。"
+          "text": "那一成给谁的，我十年都没查出来。只知道每年腊月在果阿结一次账。"
         },
         {
           "who": "guyan",
@@ -267,12 +267,12 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "香料城……老爷子的香料线。船长，去南洋吧，那是他最后跑的航线。"
+          "text": "马六甲……老爷子的香料线。船长，去南洋吧，那是他最后跑的航线。"
         }
       ],
       "reward": {
         "gold": 1100,
-        "shareZone": "north",
+        "shareZone": "northeu",
         "sharePts": 3
       }
     },
@@ -294,7 +294,7 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "香料城的香料便宜得离谱，运回白帆港、雾角能翻好几倍。老爷子说过，这条线能养活一支船队。"
+          "text": "马六甲的香料便宜得离谱，运回里斯本、丰沙尔能翻好几倍。老爷子说过，这条线能养活一支船队。"
         },
         {
           "who": "ahai",
@@ -304,8 +304,8 @@ export const STORY = {
       "objectives": [
         {
           "kind": "visit",
-          "port": "xiangliao",
-          "label": "到达香料城"
+          "port": "malacca",
+          "label": "到达马六甲"
         },
         {
           "kind": "buy",
@@ -317,8 +317,8 @@ export const STORY = {
           "kind": "sell",
           "good": "spice",
           "qty": 40,
-          "zone": "west",
-          "label": "向西洋各港累计卖出 40 香料"
+          "zone": "iberia",
+          "label": "向伊比利亚海岸各港累计卖出 40 香料"
         }
       ],
       "turnIn": null,
@@ -329,7 +329,7 @@ export const STORY = {
         },
         {
           "who": "cen",
-          "text": "咳，{captain}船长。《港务条例》第九条：总署代转商会文书。红帆同盟赫克托船长，邀你至赤砂港一叙。"
+          "text": "咳，{captain}船长。《港务条例》第九条：总署代转商会文书。红帆同盟赫克托船长，邀你至亚齐一叙。"
         },
         {
           "who": "cen",
@@ -337,12 +337,12 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "他果然跳出来了。船长，赤砂港是红帆的老窝……但不去，就永远问不出归雁号的事。"
+          "text": "他果然跳出来了。船长，亚齐是红帆的老窝……但不去，就永远问不出归雁号的事。"
         }
       ],
       "reward": {
         "gold": 1500,
-        "shareZone": "west",
+        "shareZone": "iberia",
         "sharePts": 4
       }
     },
@@ -351,7 +351,7 @@ export const STORY = {
       "type": "main",
       "title": "红帆的规矩",
       "giver": "hector",
-      "port": "chisha",
+      "port": "aceh",
       "prereq": {
         "quests": [
           "m04_spice_route"
@@ -376,7 +376,7 @@ export const STORY = {
         },
         {
           "who": "hector",
-          "text": "想在南洋跟本船长说话？先拿出配得上的实力。两条船，南洋一成半的份额。做不到就滚回西洋。"
+          "text": "想在南洋跟本船长说话？先拿出配得上的实力。两条船，南洋一成半的份额。做不到就滚回伊比利亚海岸。"
         }
       ],
       "objectives": [
@@ -387,12 +387,12 @@ export const STORY = {
         },
         {
           "kind": "share",
-          "zone": "south",
+          "zone": "nanyang",
           "pct": 15,
           "label": "南洋份额 ≥15%"
         }
       ],
-      "turnIn": "chisha",
+      "turnIn": "aceh",
       "outro": [
         {
           "who": "hector",
@@ -404,7 +404,7 @@ export const STORY = {
         },
         {
           "who": "hector",
-          "text": "南洋一半是本船长的血打下来的。你要拿，就从我手里拿——珊瑚镇外海，我等你。输了，就别再提归雁号。"
+          "text": "南洋一半是本船长的血打下来的。你要拿，就从我手里拿——班达外海，我等你。输了，就别再提归雁号。"
         },
         {
           "who": "ahai",
@@ -418,7 +418,7 @@ export const STORY = {
     {
       "id": "m06_shanhu_duel",
       "type": "main",
-      "title": "珊瑚镇外海",
+      "title": "班达外海",
       "giver": "ahai",
       "port": null,
       "prereq": {
@@ -429,7 +429,7 @@ export const STORY = {
       "intro": [
         {
           "who": "ahai",
-          "text": "赫克托的船队在珊瑚镇外海等着。船长，他的旗舰是条大商船改的炮船，火力凶得很。"
+          "text": "赫克托的船队在班达外海等着。船长，他的旗舰是条大商船改的炮船，火力凶得很。"
         },
         {
           "who": "mu",
@@ -437,15 +437,15 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "珊瑚镇……是我长大的地方。当年老爷子就是在那儿的码头把我捡上船的。别在我家门口输，船长。"
+          "text": "班达……是我长大的地方。当年老爷子就是在那儿的码头把我捡上船的。别在我家门口输，船长。"
         }
       ],
       "objectives": [
         {
           "kind": "boss",
-          "port": "shanhu",
+          "port": "banda",
           "rival": "redsail",
-          "label": "前往珊瑚镇，迎战赫克托的旗舰船队",
+          "label": "前往班达，迎战赫克托的旗舰船队",
           "bossName": "赫克托的旗舰·赤帆号"
         }
       ],
@@ -457,7 +457,7 @@ export const STORY = {
         },
         {
           "who": "hector",
-          "text": "既然你赢了，再送你一句：归雁号沉的那天，本船长的船全在香料城港里，停泊文书是岑港务长亲手签的。"
+          "text": "既然你赢了，再送你一句：归雁号沉的那天，本船长的船全在马六甲港里，停泊文书是岑港务长亲手签的。"
         },
         {
           "who": "hector",
@@ -465,7 +465,7 @@ export const STORY = {
         },
         {
           "who": "hector",
-          "text": "还有——金沙的萨利姆最近像丢了魂。去黑石港，他那儿有你要的账。"
+          "text": "还有——金沙的萨利姆最近像丢了魂。去哈瓦那，他那儿有你要的账。"
         },
         {
           "who": "ahai",
@@ -474,7 +474,7 @@ export const STORY = {
       ],
       "reward": {
         "gold": 3000,
-        "shareZone": "south",
+        "shareZone": "nanyang",
         "sharePts": 8
       }
     },
@@ -483,7 +483,7 @@ export const STORY = {
       "type": "main",
       "title": "金沙的第四把椅子",
       "giver": "salim",
-      "port": "heishi",
+      "port": "havana",
       "prereq": {
         "quests": [
           "m06_shanhu_duel"
@@ -492,7 +492,7 @@ export const STORY = {
       "intro": [
         {
           "who": "salim",
-          "text": "沧海新贵，{captain}船长！请坐。黑石港的茶不好，是从琥珀港运来的——但金沙的诚意是本地的。"
+          "text": "沧海新贵，{captain}船长！请坐。哈瓦那的茶不好，是从泉州运来的——但金沙的诚意是本地的。"
         },
         {
           "who": "salim",
@@ -500,7 +500,7 @@ export const STORY = {
         },
         {
           "who": "salim",
-          "text": "分海约有三把椅子，蓝红金。加一把，四家分海，你守西洋。护航费……我们可以叫它别的名字。"
+          "text": "分海约有三把椅子，蓝红金。加一把，四家分海，你守伊比利亚海岸。护航费……我们可以叫它别的名字。"
         },
         {
           "who": "ahai",
@@ -508,7 +508,7 @@ export const STORY = {
         },
         {
           "who": "salim",
-          "text": "金沙只是账房。谁付钱我们记，谁拿钱我们付。想看归雁号那页账？三十箱茶叶，外加五千金投在黑石港。"
+          "text": "金沙只是账房。谁付钱我们记，谁拿钱我们付。想看归雁号那页账？三十箱茶叶，外加五千金投在哈瓦那。"
         }
       ],
       "objectives": [
@@ -516,17 +516,17 @@ export const STORY = {
           "kind": "deliver",
           "good": "tea",
           "qty": 30,
-          "port": "heishi",
-          "label": "把 30 箱茶叶运抵黑石港"
+          "port": "havana",
+          "label": "把 30 箱茶叶运抵哈瓦那"
         },
         {
           "kind": "invest",
-          "port": "heishi",
+          "port": "havana",
           "amount": 5000,
-          "label": "向黑石港累计投资 5,000 金币"
+          "label": "向哈瓦那累计投资 5,000 金币"
         }
       ],
-      "turnIn": "heishi",
+      "turnIn": "havana",
       "outro": [
         {
           "who": "salim",
@@ -538,7 +538,7 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "港务长……老爷子最后一次出海，就是去风语城找港务总署交账本的！"
+          "text": "港务长……老爷子最后一次出海，就是去果阿找港务总署交账本的！"
         },
         {
           "who": "salim",
@@ -546,21 +546,21 @@ export const STORY = {
         },
         {
           "who": "salim",
-          "text": "去鲸歌湾，问问那位优雅的蓝小姐。记住，金沙的每一分善意，都是有账的。"
+          "text": "去卑尔根，问问那位优雅的蓝小姐。记住，金沙的每一分善意，都是有账的。"
         }
       ],
       "reward": {
         "gold": 3500,
-        "shareZone": "gold",
+        "shareZone": "caribbean",
         "sharePts": 4
       }
     },
     {
       "id": "m08_whale_invitation",
       "type": "main",
-      "title": "鲸歌湾的请柬",
+      "title": "卑尔根的请柬",
       "giver": "alice",
-      "port": "jingge",
+      "port": "bergen",
       "prereq": {
         "quests": [
           "m07_fourth_chair"
@@ -570,11 +570,11 @@ export const STORY = {
       "intro": [
         {
           "who": "alice",
-          "text": "{captain}船长，请坐。鲸歌湾的风冷，我让人温了茶。三年了，初雪号的帆我一眼就认得。"
+          "text": "{captain}船长，请坐。卑尔根的风冷，我让人温了茶。三年了，初雪号的帆我一眼就认得。"
         },
         {
           "who": "alice",
-          "text": "老船主教过我看账。那时他是西洋总管，我是刚进商会的小账房。你手里那枚铜印，是他亲手刻的。"
+          "text": "老船主教过我看账。那时他是伊比利亚海岸总管，我是刚进商会的小账房。你手里那枚铜印，是他亲手刻的。"
         },
         {
           "who": "alice",
@@ -582,7 +582,7 @@ export const STORY = {
         },
         {
           "who": "alice",
-          "text": "阿海，先听完。巴罗的船队已经比红帆大了，三家都养不起他。要收拾他，得拿着分海约原件在风语城开会审。"
+          "text": "阿海，先听完。巴罗的船队已经比红帆大了，三家都养不起他。要收拾他，得拿着分海约原件在果阿开会审。"
         },
         {
           "who": "alice",
@@ -592,7 +592,7 @@ export const STORY = {
       "objectives": [
         {
           "kind": "share",
-          "zone": "north",
+          "zone": "northeu",
           "pct": 20,
           "label": "北海份额 ≥20%"
         },
@@ -604,7 +604,7 @@ export const STORY = {
           "label": "击败 1 支蓝鲸商会船队"
         }
       ],
-      "turnIn": "jingge",
+      "turnIn": "bergen",
       "outro": [
         {
           "who": "alice",
@@ -620,7 +620,7 @@ export const STORY = {
         },
         {
           "who": "alice",
-          "text": "岑港务长每年腊月在风语城封印结账。带着账本、铜印和这份原件去，三家的人都会到。"
+          "text": "岑港务长每年腊月在果阿封印结账。带着账本、铜印和这份原件去，三家的人都会到。"
         },
         {
           "who": "alice",
@@ -635,9 +635,9 @@ export const STORY = {
     {
       "id": "m09_fengyu_tribunal",
       "type": "main",
-      "title": "风语城的会审",
+      "title": "果阿的会审",
       "giver": "cen",
-      "port": "fengyu",
+      "port": "goa",
       "prereq": {
         "quests": [
           "m08_whale_invitation"
@@ -662,15 +662,15 @@ export const STORY = {
         },
         {
           "who": "cen",
-          "text": "如今巴罗每年要三成，三家都付不起。按章程，会审须由珍珠海份额过两成半的商会主持，另押一万五保证金。"
+          "text": "如今巴罗每年要三成，三家都付不起。按章程，会审须由印度洋份额过两成半的商会主持，另押一万五保证金。"
         }
       ],
       "objectives": [
         {
           "kind": "share",
-          "zone": "pearl",
+          "zone": "indocean",
           "pct": 25,
-          "label": "珍珠海份额 ≥25%"
+          "label": "印度洋份额 ≥25%"
         },
         {
           "kind": "gold",
@@ -678,7 +678,7 @@ export const STORY = {
           "label": "持有 15,000 金币（会审保证金）"
         }
       ],
-      "turnIn": "fengyu",
+      "turnIn": "goa",
       "outro": [
         {
           "who": "cen",
@@ -690,11 +690,11 @@ export const STORY = {
         },
         {
           "who": "cen",
-          "text": "龙骨岛骸湾。巴罗每年冬天都在那儿修船，港务的记录上写得清清楚楚。我的茶还没喝完，船长，你去吧。"
+          "text": "澳门骸湾。巴罗每年冬天都在那儿修船，港务的记录上写得清清楚楚。我的茶还没喝完，船长，你去吧。"
         },
         {
           "who": "ahai",
-          "text": "船长……账本最后一页在我这儿。老爷子塞给我时说：'查到风语城再拿出来。'上面一行字：骸湾，冬。"
+          "text": "船长……账本最后一页在我这儿。老爷子塞给我时说：'查到果阿再拿出来。'上面一行字：骸湾，冬。"
         },
         {
           "who": "alice",
@@ -703,7 +703,7 @@ export const STORY = {
       ],
       "reward": {
         "gold": 6000,
-        "shareZone": "pearl",
+        "shareZone": "indocean",
         "sharePts": 6
       }
     },
@@ -725,11 +725,11 @@ export const STORY = {
         },
         {
           "who": "mu",
-          "text": "巴罗那条旗舰是黑石港船厂出的巡防舰，四十四门炮。四条船以下别去送死。先来翠玉港，我给船底包铜皮。"
+          "text": "巴罗那条旗舰是哈瓦那船厂出的巡防舰，四十四门炮。四条船以下别去送死。先来广州，我给船底包铜皮。"
         },
         {
           "who": "hong",
-          "text": "雾角的水手都愿意跟你走，我一个一个问过了。老船主的账，这回得清了。"
+          "text": "丰沙尔的水手都愿意跟你走，我一个一个问过了。老船主的账，这回得清了。"
         },
         {
           "who": "ahai",
@@ -744,14 +744,14 @@ export const STORY = {
         },
         {
           "kind": "invest",
-          "port": "cuiyu",
+          "port": "guangzhou",
           "amount": 3000,
-          "label": "在翠玉港投资 3,000 金币，请木叔加固船队"
+          "label": "在广州投资 3,000 金币，请木叔加固船队"
         },
         {
           "kind": "boss",
-          "port": "longgu",
-          "label": "前往龙骨岛骸湾，与独眼巴罗决战",
+          "port": "macau",
+          "label": "前往澳门骸湾，与独眼巴罗决战",
           "bossName": "巴罗的旗舰·黑潮号"
         }
       ],
@@ -810,31 +810,31 @@ export const STORY = {
         },
         {
           "who": "salim",
-          "text": "金沙的意思是……黄金海的份额可以谈。当然，价格也可以谈。"
+          "text": "金沙的意思是……加勒比海的份额可以谈。当然，价格也可以谈。"
         },
         {
           "who": "ahai",
-          "text": "他们又要分海了。船长，先把老爷子起家的西洋归一，再拿下三片海——让他们看看什么叫海不分家。"
+          "text": "他们又要分海了。船长，先把老爷子起家的伊比利亚海岸归一，再拿下三片海——让他们看看什么叫海不分家。"
         }
       ],
       "objectives": [
         {
           "kind": "share",
-          "zone": "west",
+          "zone": "iberia",
           "pct": 50,
-          "label": "主导西洋（份额 ≥50%）"
+          "label": "主导伊比利亚海岸（份额 ≥50%）"
         },
         {
           "kind": "dominate",
-          "count": 3,
-          "label": "主导至少 3 片海域（份额 ≥50%）"
+          "count": 4,
+          "label": "主导 4 个海域"
         }
       ],
       "turnIn": null,
       "outro": [
         {
           "who": "alice",
-          "text": "三海归一，西洋易主。老船主，你教出来的人，把你没做完的事做完了。……船长，蓝鲸认这一局。"
+          "text": "三海归一，伊比利亚海岸易主。老船主，你教出来的人，把你没做完的事做完了。……船长，蓝鲸认这一局。"
         },
         {
           "who": "hector",
@@ -864,7 +864,7 @@ export const STORY = {
       "type": "side",
       "title": "老钱的谷子",
       "giver": "qian",
-      "port": "baifan",
+      "port": "lisboa",
       "prereq": {
         "quests": [],
         "day": 6
@@ -872,11 +872,11 @@ export const STORY = {
       "intro": [
         {
           "who": "qian",
-          "text": "小船长，接个小活儿？鲸歌湾的谷价飞上天了，那边的货栈掌柜托我送一船谷子。"
+          "text": "小船长，接个小活儿？卑尔根的谷价飞上天了，那边的货栈掌柜托我送一船谷子。"
         },
         {
           "who": "qian",
-          "text": "白帆港的谷子便宜，你装二十五袋过去，运费我这边付。对了——那边的掌柜也叫老钱，别惊讶，行规。"
+          "text": "里斯本的谷子便宜，你装二十五袋过去，运费我这边付。对了——那边的掌柜也叫老钱，别惊讶，行规。"
         }
       ],
       "objectives": [
@@ -884,15 +884,15 @@ export const STORY = {
           "kind": "deliver",
           "good": "grain",
           "qty": 25,
-          "port": "jingge",
-          "label": "把 25 袋谷物运到鲸歌湾"
+          "port": "bergen",
+          "label": "把 25 袋谷物运到卑尔根"
         }
       ],
       "turnIn": null,
       "outro": [
         {
           "who": "qian",
-          "text": "谷子到了？好好好。白帆港的老钱来信说你靴子干净、付钱爽快。货栈联号记着你的名字了。"
+          "text": "谷子到了？好好好。里斯本的老钱来信说你靴子干净、付钱爽快。货栈联号记着你的名字了。"
         },
         {
           "who": "qian",
@@ -908,7 +908,7 @@ export const STORY = {
       "type": "side",
       "title": "木叔的图纸",
       "giver": "mu",
-      "port": "tiemao",
+      "port": "sevilla",
       "prereq": {
         "quests": [
           "m01_old_ledger"
@@ -952,7 +952,7 @@ export const STORY = {
       "type": "side",
       "title": "总署的海图",
       "giver": "cen",
-      "port": "baifan",
+      "port": "lisboa",
       "prereq": {
         "quests": [
           "m02_escort_fee"
@@ -965,7 +965,7 @@ export const STORY = {
         },
         {
           "who": "cen",
-          "text": "报酬按章程发放。八个港口，缺一不可。另外……龙骨岛那条航线务必详细记录，总署对它格外关注。"
+          "text": "报酬按章程发放。八个港口，缺一不可。另外……澳门那条航线务必详细记录，总署对它格外关注。"
         }
       ],
       "objectives": [
@@ -975,7 +975,7 @@ export const STORY = {
           "label": "到访 8 个不同港口"
         }
       ],
-      "turnIn": "baifan",
+      "turnIn": "lisboa",
       "outro": [
         {
           "who": "cen",
@@ -983,7 +983,7 @@ export const STORY = {
         },
         {
           "who": "ahai",
-          "text": "他问龙骨岛问得那么细……归雁号就是在龙骨岛外海失踪的。船长，我不喜欢这个人问问题的样子。"
+          "text": "他问澳门问得那么细……归雁号就是在澳门外海失踪的。船长，我不喜欢这个人问问题的样子。"
         }
       ],
       "reward": {
@@ -995,7 +995,7 @@ export const STORY = {
       "type": "side",
       "title": "红姨的酒债",
       "giver": "hong",
-      "port": "wujiao",
+      "port": "funchal",
       "prereq": {
         "quests": [
           "m02_escort_fee"
@@ -1004,11 +1004,11 @@ export const STORY = {
       "intro": [
         {
           "who": "hong",
-          "text": "灰岩堡那帮人欠我的酒钱三年了！你替姨把酒卖过去，卖多少都算你的——我就图个出气。"
+          "text": "伦敦那帮人欠我的酒钱三年了！你替姨把酒卖过去，卖多少都算你的——我就图个出气。"
         },
         {
           "who": "hong",
-          "text": "北海人爱雾角的酒，灰岩堡的价最好。四十桶，卖完了，北海哪个港的红姨都是我表姐妹，跟她说一声就行。"
+          "text": "北海人爱丰沙尔的酒，伦敦的价最好。四十桶，卖完了，北海哪个港的红姨都是我表姐妹，跟她说一声就行。"
         }
       ],
       "objectives": [
@@ -1016,7 +1016,7 @@ export const STORY = {
           "kind": "sell",
           "good": "wine",
           "qty": 40,
-          "zone": "north",
+          "zone": "northeu",
           "label": "向北海各港累计卖出 40 酒"
         }
       ],
@@ -1024,7 +1024,7 @@ export const STORY = {
       "outro": [
         {
           "who": "hong",
-          "text": "雾角的表姐来信了：酒卖光了？痛快！这袋钱是她托我给你的，她高兴。"
+          "text": "丰沙尔的表姐来信了：酒卖光了？痛快！这袋钱是她托我给你的，她高兴。"
         },
         {
           "who": "hong",
@@ -1040,7 +1040,7 @@ export const STORY = {
       "type": "side",
       "title": "顾砚的赎身钱",
       "giver": "guyan",
-      "port": "yinhu",
+      "port": "amsterdam",
       "prereq": {
         "quests": [
           "m03_clerk_of_yinhu"
@@ -1049,22 +1049,22 @@ export const STORY = {
       "intro": [
         {
           "who": "guyan",
-          "text": "我想走，开一间干净的账房。可蓝鲸的眼睛盯着银湖港，你不在这儿站住脚，我走不了。"
+          "text": "我想走，开一间干净的账房。可蓝鲸的眼睛盯着阿姆斯特丹，你不在这儿站住脚，我走不了。"
         },
         {
           "who": "guyan",
-          "text": "往银湖港投四千金币。港口的人记得你，蓝鲸就得掂量掂量。到那时我就能悄悄走了。"
+          "text": "往阿姆斯特丹投四千金币。港口的人记得你，蓝鲸就得掂量掂量。到那时我就能悄悄走了。"
         }
       ],
       "objectives": [
         {
           "kind": "invest",
-          "port": "yinhu",
+          "port": "amsterdam",
           "amount": 4000,
-          "label": "向银湖港累计投资 4,000 金币"
+          "label": "向阿姆斯特丹累计投资 4,000 金币"
         }
       ],
-      "turnIn": "yinhu",
+      "turnIn": "amsterdam",
       "outro": [
         {
           "who": "guyan",
@@ -1082,9 +1082,9 @@ export const STORY = {
     {
       "id": "s06_huiyan_sugar",
       "type": "side",
-      "title": "灰岩堡的伤兵",
+      "title": "伦敦的伤兵",
       "giver": "cen",
-      "port": "huiyan",
+      "port": "london",
       "prereq": {
         "quests": [
           "m03_clerk_of_yinhu"
@@ -1093,7 +1093,7 @@ export const STORY = {
       "intro": [
         {
           "who": "cen",
-          "text": "灰岩堡驻军的军需申请，第三次被驳回了。伤兵熬药要砂糖，北海不产糖，南洋的糖运不上来。"
+          "text": "伦敦驻军的军需申请，第三次被驳回了。伤兵熬药要砂糖，北海不产糖，南洋的糖运不上来。"
         },
         {
           "who": "cen",
@@ -1105,8 +1105,8 @@ export const STORY = {
           "kind": "deliver",
           "good": "sugar",
           "qty": 30,
-          "port": "huiyan",
-          "label": "把 30 砂糖运抵灰岩堡"
+          "port": "london",
+          "label": "把 30 砂糖运抵伦敦"
         }
       ],
       "turnIn": null,
@@ -1127,9 +1127,9 @@ export const STORY = {
     {
       "id": "s07_shanhu_blackflag",
       "type": "side",
-      "title": "珊瑚镇的黑旗",
+      "title": "班达的黑旗",
       "giver": "hong",
-      "port": "shanhu",
+      "port": "banda",
       "prereq": {
         "quests": [
           "m04_spice_route"
@@ -1138,7 +1138,7 @@ export const STORY = {
       "intro": [
         {
           "who": "hong",
-          "text": "姨在珊瑚镇也有间小店。这镇子上个月又被黑旗船烧了两回码头，镇上的人夜里都不敢点灯。"
+          "text": "姨在班达也有间小店。这镇子上个月又被黑旗船烧了两回码头，镇上的人夜里都不敢点灯。"
         },
         {
           "who": "ahai",
@@ -1146,7 +1146,7 @@ export const STORY = {
         },
         {
           "who": "hong",
-          "text": "替镇子出口气吧。打掉两支海盗船队，珊瑚镇的人会记着你。"
+          "text": "替镇子出口气吧。打掉两支海盗船队，班达的人会记着你。"
         }
       ],
       "objectives": [
@@ -1157,7 +1157,7 @@ export const STORY = {
           "label": "累计击败 2 支海盗船队"
         }
       ],
-      "turnIn": "shanhu",
+      "turnIn": "banda",
       "outro": [
         {
           "who": "hong",
@@ -1170,7 +1170,7 @@ export const STORY = {
       ],
       "reward": {
         "gold": 1500,
-        "shareZone": "south",
+        "shareZone": "nanyang",
         "sharePts": 3
       }
     },
@@ -1179,7 +1179,7 @@ export const STORY = {
       "type": "side",
       "title": "阿海的家",
       "giver": "ahai",
-      "port": "xiangliao",
+      "port": "malacca",
       "prereq": {
         "quests": [
           "m03_clerk_of_yinhu"
@@ -1189,11 +1189,11 @@ export const STORY = {
       "intro": [
         {
           "who": "ahai",
-          "text": "船长……珊瑚镇离这儿不远。我娘在那儿。跟老爷子上船后，我五年没回去了。"
+          "text": "船长……班达离这儿不远。我娘在那儿。跟老爷子上船后，我五年没回去了。"
         },
         {
           "who": "ahai",
-          "text": "我不下船。就想让船靠一靠，送二十五袋谷物上岸。她做的饼要用白帆港的谷子。"
+          "text": "我不下船。就想让船靠一靠，送二十五袋谷物上岸。她做的饼要用里斯本的谷子。"
         },
         {
           "who": "ahai",
@@ -1205,8 +1205,8 @@ export const STORY = {
           "kind": "deliver",
           "good": "grain",
           "qty": 25,
-          "port": "shanhu",
-          "label": "带 25 袋谷物到珊瑚镇交付"
+          "port": "banda",
+          "label": "带 25 袋谷物到班达交付"
         }
       ],
       "turnIn": null,
@@ -1222,7 +1222,7 @@ export const STORY = {
       ],
       "reward": {
         "gold": 600,
-        "shareZone": "south",
+        "shareZone": "nanyang",
         "sharePts": 2
       }
     },
@@ -1231,7 +1231,7 @@ export const STORY = {
       "type": "side",
       "title": "萨利姆的咖啡",
       "giver": "salim",
-      "port": "luori",
+      "port": "cartagena",
       "prereq": {
         "quests": [
           "m07_fourth_chair"
@@ -1240,11 +1240,11 @@ export const STORY = {
       "intro": [
         {
           "who": "salim",
-          "text": "朋友！落日港的萨利姆也想做点小生意。星礁的咖啡便宜，雾角的人宁愿用金币换。"
+          "text": "朋友！卡塔赫纳的萨利姆也想做点小生意。波托韦洛的咖啡便宜，丰沙尔的人宁愿用金币换。"
         },
         {
           "who": "salim",
-          "text": "帮金沙卖四十袋咖啡到西洋去。利润你拿，我只要一个消息：西洋的人怎么议论金沙。"
+          "text": "帮金沙卖四十袋咖啡到伊比利亚海岸去。利润你拿，我只要一个消息：伊比利亚海岸的人怎么议论金沙。"
         }
       ],
       "objectives": [
@@ -1252,15 +1252,15 @@ export const STORY = {
           "kind": "sell",
           "good": "coffee",
           "qty": 40,
-          "zone": "west",
-          "label": "向西洋各港累计卖出 40 咖啡"
+          "zone": "iberia",
+          "label": "向伊比利亚海岸各港累计卖出 40 咖啡"
         }
       ],
       "turnIn": null,
       "outro": [
         {
           "who": "salim",
-          "text": "金沙的快信到了：卖得好。西洋议论金沙？无所谓，他们议论，就说明他们还在买。"
+          "text": "金沙的快信到了：卖得好。伊比利亚海岸议论金沙？无所谓，他们议论，就说明他们还在买。"
         },
         {
           "who": "salim",
@@ -1276,7 +1276,7 @@ export const STORY = {
       "type": "side",
       "title": "艾丽丝的棋局",
       "giver": "alice",
-      "port": "huiyan",
+      "port": "london",
       "prereq": {
         "quests": [
           "m05_redsail_rules"
@@ -1285,30 +1285,30 @@ export const STORY = {
       "intro": [
         {
           "who": "alice",
-          "text": "船长，蓝鲸想请你做一件对你也有好处的事：把红帆在西洋的旗子压下去。"
+          "text": "船长，蓝鲸想请你做一件对你也有好处的事：把红帆在伊比利亚海岸的旗子压下去。"
         },
         {
           "who": "alice",
-          "text": "西洋三成半的份额。做到了，蓝鲸付三千金——不多，但蓝鲸从不欠账。"
+          "text": "伊比利亚海岸三成半的份额。做到了，蓝鲸付三千金——不多，但蓝鲸从不欠账。"
         },
         {
           "who": "alice",
-          "text": "你想问为什么找你？因为老船主当年也是从西洋起家的。我想看看，他的路还能不能再走一遍。"
+          "text": "你想问为什么找你？因为老船主当年也是从伊比利亚海岸起家的。我想看看，他的路还能不能再走一遍。"
         }
       ],
       "objectives": [
         {
           "kind": "share",
-          "zone": "west",
+          "zone": "iberia",
           "pct": 35,
-          "label": "西洋份额 ≥35%"
+          "label": "伊比利亚海岸份额 ≥35%"
         }
       ],
-      "turnIn": "huiyan",
+      "turnIn": "london",
       "outro": [
         {
           "who": "alice",
-          "text": "很好。西洋的风向变了，赫克托会睡不着的。"
+          "text": "很好。伊比利亚海岸的风向变了，赫克托会睡不着的。"
         },
         {
           "who": "alice",
@@ -1322,9 +1322,9 @@ export const STORY = {
     {
       "id": "s11_longgu_lighthouse",
       "type": "side",
-      "title": "龙骨岛的灯",
+      "title": "澳门的灯",
       "giver": "ding",
-      "port": "longgu",
+      "port": "macau",
       "prereq": {
         "quests": [
           "m06_shanhu_duel"
@@ -1333,7 +1333,7 @@ export const STORY = {
       "intro": [
         {
           "who": "ding",
-          "text": "灯塔的梁塌了半边，我这老骨头扛不动木头。二十根木料，船长，龙骨岛上一根树都没有。"
+          "text": "灯塔的梁塌了半边，我这老骨头扛不动木头。二十根木料，船长，澳门上一根树都没有。"
         },
         {
           "who": "ding",
@@ -1345,8 +1345,8 @@ export const STORY = {
           "kind": "deliver",
           "good": "wood",
           "qty": 20,
-          "port": "longgu",
-          "label": "把 20 根木材运到龙骨岛"
+          "port": "macau",
+          "label": "把 20 根木材运到澳门"
         }
       ],
       "turnIn": null,
@@ -1371,9 +1371,9 @@ export const STORY = {
     {
       "id": "s12_yueya_herb",
       "type": "side",
-      "title": "月牙港的药材",
+      "title": "摩卡的药材",
       "giver": "qian",
-      "port": "yueya",
+      "port": "mocha",
       "prereq": {
         "quests": [
           "m04_spice_route"
@@ -1382,11 +1382,11 @@ export const STORY = {
       "intro": [
         {
           "who": "qian",
-          "text": "月牙港的药材是好东西，黄金海的落日港缺得厉害，那边的人愿意出高价。"
+          "text": "摩卡的药材是好东西，加勒比海的卡塔赫纳缺得厉害，那边的人愿意出高价。"
         },
         {
           "who": "qian",
-          "text": "三十份药材，卖到黄金海去。掌柜我不收介绍费——联号会记你一功，这比钱有用。"
+          "text": "三十份药材，卖到加勒比海去。掌柜我不收介绍费——联号会记你一功，这比钱有用。"
         }
       ],
       "objectives": [
@@ -1394,15 +1394,15 @@ export const STORY = {
           "kind": "sell",
           "good": "herb",
           "qty": 30,
-          "zone": "gold",
-          "label": "向黄金海各港累计卖出 30 药材"
+          "zone": "caribbean",
+          "label": "向加勒比海各港累计卖出 30 药材"
         }
       ],
       "turnIn": null,
       "outro": [
         {
           "who": "qian",
-          "text": "成了。月牙港的老钱来信说，金沙的人问起了你的船。这是联号给你的份子。"
+          "text": "成了。摩卡的老钱来信说，金沙的人问起了你的船。这是联号给你的份子。"
         },
         {
           "who": "qian",
@@ -1418,7 +1418,7 @@ export const STORY = {
       "type": "side",
       "title": "木叔的最后一艘船",
       "giver": "mu",
-      "port": "cuiyu",
+      "port": "guangzhou",
       "prereq": {
         "quests": [
           "m08_whale_invitation"
@@ -1431,7 +1431,7 @@ export const STORY = {
         },
         {
           "who": "mu",
-          "text": "三万二千金币，三十门炮位，三百二十点船体。翠玉港的三级船厂能造。老船主说，省下的木头都会变成海里的洞。"
+          "text": "三万二千金币，三十门炮位，三百二十点船体。广州的三级船厂能造。老船主说，省下的木头都会变成海里的洞。"
         },
         {
           "who": "mu",
@@ -1453,7 +1453,7 @@ export const STORY = {
         },
         {
           "who": "mu",
-          "text": "去吧。木匠只造船，不打仗。但我会在翠玉港等你回来修船。这袋钱是他当年付的定金，该还给你。"
+          "text": "去吧。木匠只造船，不打仗。但我会在广州等你回来修船。这袋钱是他当年付的定金，该还给你。"
         }
       ],
       "reward": {
@@ -1467,7 +1467,7 @@ export const STORY = {
       "type": "side",
       "title": "赫克托的回礼",
       "giver": "hector",
-      "port": "chisha",
+      "port": "aceh",
       "prereq": {
         "quests": [
           "m09_fengyu_tribunal"
@@ -1492,7 +1492,7 @@ export const STORY = {
           "label": "击败 1 支金沙公司船队"
         }
       ],
-      "turnIn": "chisha",
+      "turnIn": "aceh",
       "outro": [
         {
           "who": "hector",
@@ -1505,7 +1505,7 @@ export const STORY = {
       ],
       "reward": {
         "gold": 3000,
-        "shareZone": "south",
+        "shareZone": "nanyang",
         "sharePts": 4
       }
     }

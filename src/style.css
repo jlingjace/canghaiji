@@ -127,6 +127,17 @@ kbd{background:#06101a;border:1px solid var(--line2);padding:0 5px;font:10px var
 .npc.big > div:last-child{min-height:170px}
 .ccard .bust-wrap{margin-bottom:4px}
 .vs .bust-wrap{animation-duration:.22s}
+.encopt{display:flex;align-items:center;gap:10px;margin:5px 0}
+.encopt .btn{min-width:132px;text-align:left}
+#guide{position:absolute;left:12px;top:12px;z-index:3;display:none;font-size:12px;max-width:52%;
+  border:8px solid transparent;border-image:var(--frame-gold) 8 repeat;background:var(--panel);padding:1px 8px}
+#guide.bad{color:var(--bad)} #guide.warn{color:var(--warn)} #guide.gold{color:var(--gold)} #guide.muted{color:var(--muted)}
+#app:has(#sailbanner[style*="block"]) #guide{top:46px}
+#porttip{position:absolute;left:12px;bottom:12px;z-index:3;display:none;max-width:280px;font-size:12px;line-height:1.7;
+  border:8px solid transparent;border-image:var(--frame-steel) 8 repeat;background:var(--panel2);padding:2px 8px;pointer-events:none}
+#mapctl{flex-wrap:wrap;max-width:60%;justify-content:flex-end}
+.modal .scroll table{font-size:11px}
+.modal .scroll th{position:sticky;top:0;background:var(--panel);z-index:1}
 .spacer{flex:1}
 .dlg-text{font-size:14px;line-height:1.8;min-height:52px}
 @keyframes lids{0%,93%{opacity:0}94%,100%{opacity:1}}

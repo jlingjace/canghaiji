@@ -1,0 +1,1267 @@
+{
+ "zones": [
+  {
+   "id": "iberia",
+   "name": "伊比利亚海岸",
+   "nameEn": "Iberian Atlantic",
+   "color": "#e08a3c",
+   "lonRange": [
+    -18,
+    -5
+   ],
+   "latRange": [
+    28,
+    44
+   ],
+   "style": "iberian",
+   "note": "大西洋东岸的出发线：里斯本与塞维利亚是通往非洲、印度与美洲的三条航线起点，马德拉是远洋第一个补给岛。新手区，短途密集。"
+  },
+  {
+   "id": "medsea",
+   "name": "地中海",
+   "nameEn": "Mediterranean Sea",
+   "color": "#2f9fd0",
+   "lonRange": [
+    0,
+    20
+   ],
+   "latRange": [
+    33,
+    45
+   ],
+   "style": "mediterranean",
+   "note": "威尼斯、热那亚、马赛与突尼斯之间的内海航线，航程短、周转快，是练手与攒第一笔本金的海域。"
+  },
+  {
+   "id": "levant",
+   "name": "黎凡特海",
+   "nameEn": "Levant & Eastern Mediterranean",
+   "color": "#a06fd1",
+   "lonRange": [
+    22,
+    37
+   ],
+   "latRange": [
+    30,
+    42
+   ],
+   "style": "ottoman",
+   "note": "东地中海的转口带：陆路商队把波斯丝绸、阿拉伯香料与也门咖啡送到伊斯坦布尔、亚历山大与贝鲁特上船。"
+  },
+  {
+   "id": "northeu",
+   "name": "北海",
+   "nameEn": "North Sea & Baltic",
+   "color": "#4f6fd0",
+   "lonRange": [
+    -5,
+    26
+   ],
+   "latRange": [
+    50,
+    62
+   ],
+   "style": "northern",
+   "note": "伦敦—阿姆斯特丹—吕贝克—格但斯克—卑尔根的北方大宗贸易圈：粮食、木材、咸鱼、毛皮走量，呢绒与铁器外销全球。"
+  },
+  {
+   "id": "guinea",
+   "name": "几内亚湾",
+   "nameEn": "Gulf of Guinea",
+   "color": "#c4452f",
+   "lonRange": [
+    -26,
+    10
+   ],
+   "latRange": [
+    -5,
+    16
+   ],
+   "style": "westafrican",
+   "note": "西非海岸线：欧洲布匹、铁器与玻璃在此换象牙、麦拉盖塔胡椒与岛屿砂糖，也是绕好望角前最后的补给带。"
+  },
+  {
+   "id": "indocean",
+   "name": "印度洋",
+   "nameEn": "Arabian Sea & Indian Coast",
+   "color": "#14a88a",
+   "lonRange": [
+    38,
+    85
+   ],
+   "latRange": [
+    -8,
+    26
+   ],
+   "style": "indian",
+   "note": "斯瓦希里海岸—红海—波斯湾—马拉巴尔—科罗曼德的季风贸易网，香料、棉布、宝石与咖啡的总源头，白银的最大买家之一。"
+  },
+  {
+   "id": "nanyang",
+   "name": "南洋",
+   "nameEn": "Malacca & the Spice Islands",
+   "color": "#7ec13a",
+   "lonRange": [
+    95,
+    132
+   ],
+   "latRange": [
+    -8,
+    16
+   ],
+   "style": "seasia",
+   "note": "马六甲海峡到班达、马尼拉的群岛贸易：丁香肉豆蔻的唯一产地，粮食与布匹全靠外运，价差极端。"
+  },
+  {
+   "id": "eastasia",
+   "name": "东海",
+   "nameEn": "East China Sea",
+   "color": "#e35d95",
+   "lonRange": [
+    110,
+    132
+   ],
+   "latRange": [
+    20,
+    36
+   ],
+   "style": "eastasia",
+   "note": "广州—泉州—澳门—长崎的丝银航路：瓷器丝绸茶叶从华南出海，日本白银北上南下，全图最高价值的终点站。"
+  },
+  {
+   "id": "caribbean",
+   "name": "加勒比海",
+   "nameEn": "Caribbean Sea",
+   "color": "#f2c94c",
+   "lonRange": [
+    -92,
+    -62
+   ],
+   "latRange": [
+    8,
+    26
+   ],
+   "style": "colonial",
+   "note": "新大陆的出口口岸群：白银、可可、烟草与祖母绿在此装船，欧洲的酒、油、布与铁器在此卸货。"
+  },
+  {
+   "id": "brazil",
+   "name": "巴西海岸",
+   "nameEn": "Brazilian Coast & South Atlantic",
+   "color": "#8d6a3f",
+   "lonRange": [
+    -48,
+    -30
+   ],
+   "latRange": [
+    -25,
+    -2
+   ],
+   "style": "brazil",
+   "note": "南大西洋的糖与染木海岸，借东南信风与几内亚湾、伊比利亚构成一条三角回程。"
+  }
+ ],
+ "goods": [
+  {
+   "id": "grain",
+   "name": "谷物",
+   "base": 20,
+   "note": "波罗的海黑麦与埃及小麦，运往缺粮的岛屿、要塞与香料群岛。"
+  },
+  {
+   "id": "wood",
+   "name": "木材",
+   "base": 30,
+   "note": "波兰与挪威船材、南洋硬木，输往无林的北非、波斯湾与印度东岸。"
+  },
+  {
+   "id": "saltfish",
+   "name": "咸鱼",
+   "base": 35,
+   "note": "北海鲱鱼与挪威干鳕，既是远航口粮，也是南欧与种植园的日常食品。"
+  },
+  {
+   "id": "leather",
+   "name": "皮革",
+   "base": 45,
+   "note": "北非熟皮、波罗的海生皮与加勒比牛皮，运往南欧制鞋与马具作坊。"
+  },
+  {
+   "id": "cotton",
+   "name": "棉花",
+   "base": 55,
+   "note": "埃及、安纳托利亚与马拉巴尔原棉，供应低地与意大利的织造业。"
+  },
+  {
+   "id": "wine",
+   "name": "酒",
+   "base": 60,
+   "note": "伊比利亚与地中海葡萄酒，随船远销北欧与所有海外据点。"
+  },
+  {
+   "id": "oliveoil",
+   "name": "橄榄油",
+   "base": 65,
+   "note": "安达卢西亚与地中海橄榄油，装在大陶罐里随大西洋船队西运。"
+  },
+  {
+   "id": "cloth",
+   "name": "布匹",
+   "base": 70,
+   "note": "英格兰呢绒、佛兰德细布与科罗曼德棉布，全球通用的交换物。"
+  },
+  {
+   "id": "sugar",
+   "name": "砂糖",
+   "base": 80,
+   "note": "马德拉、圣多美与巴西的甘蔗糖，北欧市场永远吃不饱。"
+  },
+  {
+   "id": "iron",
+   "name": "铁器",
+   "base": 90,
+   "note": "比斯开铁料、佛兰德五金与日本铜铁器，缺矿地区出高价收。"
+  },
+  {
+   "id": "tobacco",
+   "name": "烟草",
+   "base": 110,
+   "note": "古巴与巴西烟叶，经塞维利亚与阿姆斯特丹进入欧洲市场。"
+  },
+  {
+   "id": "tea",
+   "name": "茶叶",
+   "base": 120,
+   "note": "闽粤外销茶，此时在欧洲还是刚刚起步的新奇货。"
+  },
+  {
+   "id": "coffee",
+   "name": "咖啡",
+   "base": 130,
+   "note": "也门摩卡豆经红海北上，是伊斯坦布尔与马赛咖啡馆的命脉。"
+  },
+  {
+   "id": "cocoa",
+   "name": "可可",
+   "base": 140,
+   "note": "新西班牙与新格拉纳达的可可豆，经塞维利亚输入欧洲。"
+  },
+  {
+   "id": "herb",
+   "name": "药材",
+   "base": 150,
+   "note": "阿拉伯乳香没药、波斯药材与印度草药，也是东亚高价收购的舶来药。"
+  },
+  {
+   "id": "glass",
+   "name": "玻璃",
+   "base": 160,
+   "note": "威尼斯玻璃器与镜子，转销黎凡特、西非与印度各口岸。"
+  },
+  {
+   "id": "fur",
+   "name": "毛皮",
+   "base": 180,
+   "note": "北欧与东欧毛皮经波罗的海南下，地中海与奥斯曼市场抢购。"
+  },
+  {
+   "id": "spice",
+   "name": "香料",
+   "base": 200,
+   "note": "马拉巴尔胡椒、班达肉豆蔻与丁香，东方运往欧洲最稳的利润来源。"
+  },
+  {
+   "id": "silk",
+   "name": "丝绸",
+   "base": 260,
+   "note": "华南生丝与黎凡特绸缎，单位体积价值极高，最经得起长途运输。"
+  },
+  {
+   "id": "porcelain",
+   "name": "瓷器",
+   "base": 300,
+   "note": "外销瓷经广州、澳门装船，东非、奥斯曼与欧洲宫廷同样追捧。"
+  },
+  {
+   "id": "dye",
+   "name": "染料",
+   "base": 320,
+   "note": "巴西苏木、墨西哥胭脂虫红与印度靛蓝，北欧染坊的命根子。"
+  },
+  {
+   "id": "ivory",
+   "name": "象牙",
+   "base": 400,
+   "note": "几内亚湾与斯瓦希里海岸象牙，安特卫普与华南的雕作坊都要。"
+  },
+  {
+   "id": "gem",
+   "name": "珠宝",
+   "base": 600,
+   "note": "戈尔康达钻石、波斯湾珍珠与新格拉纳达祖母绿。"
+  },
+  {
+   "id": "silver",
+   "name": "白银",
+   "base": 700,
+   "note": "美洲与日本白银，一路东流，换回丝绸、瓷器与香料。"
+  }
+ ],
+ "ports": [
+  {
+   "id": "lisboa",
+   "name": "里斯本",
+   "nameEn": "Lisboa",
+   "lat": 38.71,
+   "lon": -9.14,
+   "zone": "iberia",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "wine",
+    "oliveoil",
+    "saltfish"
+   ],
+   "demand": [
+    "spice",
+    "porcelain",
+    "silk"
+   ],
+   "note": "特茹河口的远洋起点，印度航线的香料在此卸货，王家船厂就设在河岸。"
+  },
+  {
+   "id": "sevilla",
+   "name": "塞维利亚",
+   "nameEn": "Sevilla",
+   "lat": 37.39,
+   "lon": -5.99,
+   "zone": "iberia",
+   "tier": 3,
+   "yard": 2,
+   "produce": [
+    "oliveoil",
+    "iron"
+   ],
+   "demand": [
+    "silver",
+    "cocoa",
+    "tobacco"
+   ],
+   "note": "瓜达尔基维尔河上的内河大港，美洲船队的登记与卸银地，也是橄榄油与铁料的集散地。"
+  },
+  {
+   "id": "funchal",
+   "name": "丰沙尔",
+   "nameEn": "Funchal",
+   "lat": 32.65,
+   "lon": -16.91,
+   "zone": "iberia",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "sugar",
+    "wine"
+   ],
+   "demand": [
+    "grain",
+    "cloth",
+    "iron"
+   ],
+   "note": "马德拉岛上的甘蔗与葡萄园小港，南下船队的第一个补给站，粮食与铁器全靠外运。"
+  },
+  {
+   "id": "venezia",
+   "name": "威尼斯",
+   "nameEn": "Venezia",
+   "lat": 45.44,
+   "lon": 12.34,
+   "zone": "medsea",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "glass",
+    "cloth"
+   ],
+   "demand": [
+    "spice",
+    "silk",
+    "dye"
+   ],
+   "note": "潟湖上的老牌共和国商港，国营船厂规模惊人，玻璃与织物外销，香料丝绸靠黎凡特转口买入。"
+  },
+  {
+   "id": "genova",
+   "name": "热那亚",
+   "nameEn": "Genova",
+   "lat": 44.41,
+   "lon": 8.93,
+   "zone": "medsea",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "wine",
+    "oliveoil"
+   ],
+   "demand": [
+    "fur",
+    "gem",
+    "saltfish"
+   ],
+   "note": "利古里亚海的银行与船东之城，奢侈品买手多，斋期咸鱼消耗巨大。"
+  },
+  {
+   "id": "marseille",
+   "name": "马赛",
+   "nameEn": "Marseille",
+   "lat": 43.3,
+   "lon": 5.37,
+   "zone": "medsea",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "wine",
+    "cloth"
+   ],
+   "demand": [
+    "coffee",
+    "cocoa",
+    "leather"
+   ],
+   "note": "法国南岸的黎凡特贸易门户，普罗旺斯酒与织物出海，咖啡与皮革在此进城。"
+  },
+  {
+   "id": "tunis",
+   "name": "突尼斯",
+   "nameEn": "Tunis",
+   "lat": 36.8,
+   "lon": 10.18,
+   "zone": "medsea",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "oliveoil",
+    "leather"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "wood"
+   ],
+   "note": "北非海岸的中转小港，橄榄油与熟皮出口，木材和金属器完全依赖海运。"
+  },
+  {
+   "id": "istanbul",
+   "name": "伊斯坦布尔",
+   "nameEn": "Istanbul",
+   "lat": 41.01,
+   "lon": 28.98,
+   "zone": "levant",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "herb",
+    "cotton"
+   ],
+   "demand": [
+    "grain",
+    "coffee",
+    "porcelain"
+   ],
+   "note": "扼守海峡的百万人口都城，帝国船厂常年开工；城里的粮食、咖啡与瓷器永远供不应求。"
+  },
+  {
+   "id": "alexandria",
+   "name": "亚历山大",
+   "nameEn": "Alexandria",
+   "lat": 31.2,
+   "lon": 29.92,
+   "zone": "levant",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "grain",
+    "cotton"
+   ],
+   "demand": [
+    "wood",
+    "iron",
+    "fur"
+   ],
+   "note": "尼罗河三角洲的出海口，粮食与棉花装船北上，本地不产木材与铁，历来靠进口。"
+  },
+  {
+   "id": "beirut",
+   "name": "贝鲁特",
+   "nameEn": "Beirut",
+   "lat": 33.89,
+   "lon": 35.5,
+   "zone": "levant",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "silk",
+    "herb"
+   ],
+   "demand": [
+    "cloth",
+    "glass",
+    "iron"
+   ],
+   "note": "黎凡特海岸的小港，内陆商队把叙利亚生丝与药材送到码头，换回布匹、玻璃器与铁货。"
+  },
+  {
+   "id": "london",
+   "name": "伦敦",
+   "nameEn": "London",
+   "lat": 51.51,
+   "lon": -0.13,
+   "zone": "northeu",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "cloth",
+    "iron"
+   ],
+   "demand": [
+    "wine",
+    "sugar",
+    "dye"
+   ],
+   "note": "泰晤士河上的呢绒出口港与船坞区，南方的酒、糖和染料在此换成英格兰布匹。"
+  },
+  {
+   "id": "amsterdam",
+   "name": "阿姆斯特丹",
+   "nameEn": "Amsterdam",
+   "lat": 52.37,
+   "lon": 4.9,
+   "zone": "northeu",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "saltfish",
+    "cloth"
+   ],
+   "demand": [
+    "spice",
+    "tea",
+    "tobacco"
+   ],
+   "note": "运河与锯木风车堆起来的集散市场，鲱鱼与细布出海，东方与新大陆的新货在此定价。"
+  },
+  {
+   "id": "antwerpen",
+   "name": "安特卫普",
+   "nameEn": "Antwerpen",
+   "lat": 51.22,
+   "lon": 4.4,
+   "zone": "northeu",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "cloth",
+    "iron"
+   ],
+   "demand": [
+    "dye",
+    "cotton",
+    "ivory"
+   ],
+   "note": "斯海尔德河上的金融与手工业重镇，染坊与象牙雕作坊养活半座城。"
+  },
+  {
+   "id": "lubeck",
+   "name": "吕贝克",
+   "nameEn": "Lübeck",
+   "lat": 53.87,
+   "lon": 10.69,
+   "zone": "northeu",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "saltfish",
+    "leather"
+   ],
+   "demand": [
+    "wine",
+    "sugar",
+    "spice"
+   ],
+   "note": "波罗的海西口的老商盟首城，盐渍鲱鱼与皮货走量，南方的酒糖香料在此换手。"
+  },
+  {
+   "id": "gdansk",
+   "name": "格但斯克",
+   "nameEn": "Gdańsk",
+   "lat": 54.35,
+   "lon": 18.65,
+   "zone": "northeu",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "grain",
+    "wood",
+    "fur"
+   ],
+   "demand": [
+    "wine",
+    "cloth",
+    "sugar"
+   ],
+   "note": "维斯瓦河出海口的粮仓与木材码头，内陆的黑麦、船材与毛皮顺流而下。"
+  },
+  {
+   "id": "bergen",
+   "name": "卑尔根",
+   "nameEn": "Bergen",
+   "lat": 60.39,
+   "lon": 5.32,
+   "zone": "northeu",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "saltfish",
+    "fur"
+   ],
+   "demand": [
+    "grain",
+    "wine",
+    "cloth"
+   ],
+   "note": "挪威西岸的干鳕鱼码头，北方毛皮在此上船；本地不长粮食，全年靠南方运来。"
+  },
+  {
+   "id": "caboverde",
+   "name": "佛得角",
+   "nameEn": "Cabo Verde",
+   "lat": 14.92,
+   "lon": -23.6,
+   "zone": "guinea",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "cotton",
+    "saltfish"
+   ],
+   "demand": [
+    "grain",
+    "wine",
+    "iron"
+   ],
+   "note": "大西洋中的火山群岛，出产土棉布与海盐咸鱼，是横渡前最后一处淡水补给点。"
+  },
+  {
+   "id": "elmina",
+   "name": "埃尔米纳",
+   "nameEn": "Elmina",
+   "lat": 5.08,
+   "lon": -1.35,
+   "zone": "guinea",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "ivory",
+    "spice"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "glass"
+   ],
+   "note": "黄金海岸的石堡商站，内陆商路带来象牙与麦拉盖塔胡椒，换走布匹、铁器与玻璃。"
+  },
+  {
+   "id": "saotome",
+   "name": "圣多美",
+   "nameEn": "São Tomé",
+   "lat": 0.34,
+   "lon": 6.73,
+   "zone": "guinea",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "sugar",
+    "ivory"
+   ],
+   "demand": [
+    "cloth",
+    "wine",
+    "grain"
+   ],
+   "note": "赤道上的甘蔗岛，糖厂与象牙仓一半是码头，日用品与粮食全部外购。"
+  },
+  {
+   "id": "mombasa",
+   "name": "蒙巴萨",
+   "nameEn": "Mombasa",
+   "lat": -4.04,
+   "lon": 39.67,
+   "zone": "indocean",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "ivory",
+    "grain"
+   ],
+   "demand": [
+    "cloth",
+    "porcelain",
+    "iron"
+   ],
+   "note": "斯瓦希里海岸的珊瑚石城，象牙与高粱出口，富户以收藏外销瓷为体面。"
+  },
+  {
+   "id": "mocha",
+   "name": "摩卡",
+   "nameEn": "Mocha",
+   "lat": 13.32,
+   "lon": 43.25,
+   "zone": "indocean",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "coffee",
+    "herb"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "grain"
+   ],
+   "note": "红海口的咖啡装船港，高地咖啡豆与乳香没药在此上驳船，粮食布匹靠海运补给。"
+  },
+  {
+   "id": "hormuz",
+   "name": "霍尔木兹",
+   "nameEn": "Hormuz",
+   "lat": 27.09,
+   "lon": 56.46,
+   "zone": "indocean",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "gem",
+    "leather"
+   ],
+   "demand": [
+    "grain",
+    "wood",
+    "cloth"
+   ],
+   "note": "波斯湾口的岩石岛市，珍珠与波斯皮货集散；岛上寸草不生，连饮水都要用船运。"
+  },
+  {
+   "id": "goa",
+   "name": "果阿",
+   "nameEn": "Goa",
+   "lat": 15.5,
+   "lon": 73.91,
+   "zone": "indocean",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "spice",
+    "herb"
+   ],
+   "demand": [
+    "silver",
+    "wine",
+    "glass"
+   ],
+   "note": "曼多维河上的印度洋总部与船厂，整套体系靠运进来的白银运转。"
+  },
+  {
+   "id": "calicut",
+   "name": "卡利卡特",
+   "nameEn": "Calicut",
+   "lat": 11.25,
+   "lon": 75.78,
+   "zone": "indocean",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "spice",
+    "cotton"
+   ],
+   "demand": [
+    "silver",
+    "iron",
+    "wine"
+   ],
+   "note": "马拉巴尔海岸的胡椒老港，季风一转便挤满等着装胡椒与棉纱的船。"
+  },
+  {
+   "id": "masulipatnam",
+   "name": "默苏利珀德姆",
+   "nameEn": "Masulipatnam",
+   "lat": 16.19,
+   "lon": 81.13,
+   "zone": "indocean",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "cloth",
+    "gem"
+   ],
+   "demand": [
+    "silver",
+    "spice",
+    "wood"
+   ],
+   "note": "科罗曼德海岸的印花棉布出口港，内陆矿区的钻石也由这里出海。"
+  },
+  {
+   "id": "aceh",
+   "name": "亚齐",
+   "nameEn": "Aceh",
+   "lat": 5.55,
+   "lon": 95.32,
+   "zone": "nanyang",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "spice",
+    "herb"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "silver"
+   ],
+   "note": "苏门答腊北端的胡椒港，扼守海峡西口，樟脑与安息香也是当地名产。"
+  },
+  {
+   "id": "malacca",
+   "name": "马六甲",
+   "nameEn": "Malacca",
+   "lat": 2.19,
+   "lon": 102.25,
+   "zone": "nanyang",
+   "tier": 3,
+   "yard": 2,
+   "produce": [
+    "spice",
+    "wood"
+   ],
+   "demand": [
+    "silver",
+    "cloth",
+    "wine"
+   ],
+   "note": "海峡咽喉上的转口大港，东西两头的船在这里换货、等季风。"
+  },
+  {
+   "id": "manila",
+   "name": "马尼拉",
+   "nameEn": "Manila",
+   "lat": 14.6,
+   "lon": 120.98,
+   "zone": "nanyang",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "grain",
+    "gem"
+   ],
+   "demand": [
+    "silver",
+    "cloth",
+    "wine"
+   ],
+   "note": "吕宋湾内的白银交易市，本地稻米与苏禄珍珠出港，湾边的硬木船坞能造大船。"
+  },
+  {
+   "id": "banda",
+   "name": "班达",
+   "nameEn": "Banda Neira",
+   "lat": -4.53,
+   "lon": 129.9,
+   "zone": "nanyang",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "spice",
+    "wood"
+   ],
+   "demand": [
+    "cloth",
+    "grain",
+    "iron"
+   ],
+   "note": "全世界肉豆蔻的唯一产地，火山小岛不产粮食，一切吃用都等船送来。"
+  },
+  {
+   "id": "guangzhou",
+   "name": "广州",
+   "nameEn": "Guangzhou",
+   "lat": 23.13,
+   "lon": 113.26,
+   "zone": "eastasia",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "porcelain",
+    "silk",
+    "tea"
+   ],
+   "demand": [
+    "spice",
+    "ivory",
+    "gem"
+   ],
+   "note": "珠江口的外销总门户，瓷器丝绸茶叶在此装船；胡椒、象牙与宝石则是内地作坊抢手的进口货。"
+  },
+  {
+   "id": "quanzhou",
+   "name": "泉州",
+   "nameEn": "Quanzhou",
+   "lat": 24.87,
+   "lon": 118.68,
+   "zone": "eastasia",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "silk",
+    "tea"
+   ],
+   "demand": [
+    "spice",
+    "herb",
+    "cotton"
+   ],
+   "note": "闽南的老海港与造船地，生丝与茶叶下海，南洋香料与药材上岸。"
+  },
+  {
+   "id": "macau",
+   "name": "澳门",
+   "nameEn": "Macau",
+   "lat": 22.19,
+   "lon": 113.54,
+   "zone": "eastasia",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "porcelain",
+    "tea"
+   ],
+   "demand": [
+    "spice",
+    "ivory",
+    "wine"
+   ],
+   "note": "珠江口外的半岛转口点，往返长崎的丝银船都在这里过冬修补。"
+  },
+  {
+   "id": "nagasaki",
+   "name": "长崎",
+   "nameEn": "Nagasaki",
+   "lat": 32.74,
+   "lon": 129.87,
+   "zone": "eastasia",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "silver",
+    "iron"
+   ],
+   "demand": [
+    "silk",
+    "porcelain",
+    "herb"
+   ],
+   "note": "九州西岸的深水湾，银山的白银与铜铁器由此出港，换回生丝、瓷器与舶来药材。"
+  },
+  {
+   "id": "havana",
+   "name": "哈瓦那",
+   "nameEn": "Havana",
+   "lat": 23.13,
+   "lon": -82.38,
+   "zone": "caribbean",
+   "tier": 3,
+   "yard": 3,
+   "produce": [
+    "tobacco",
+    "leather"
+   ],
+   "demand": [
+    "wine",
+    "cloth",
+    "oliveoil"
+   ],
+   "note": "加勒比最好的避风湾与船厂，返航船队在此集结补给，本地出烟叶与牛皮。"
+  },
+  {
+   "id": "cartagena",
+   "name": "卡塔赫纳",
+   "nameEn": "Cartagena de Indias",
+   "lat": 10.42,
+   "lon": -75.55,
+   "zone": "caribbean",
+   "tier": 3,
+   "yard": 2,
+   "produce": [
+    "gem",
+    "cocoa"
+   ],
+   "demand": [
+    "cloth",
+    "wine",
+    "iron"
+   ],
+   "note": "大陆海岸的要塞大港，内陆矿区的祖母绿与可可豆在此装船。"
+  },
+  {
+   "id": "portobelo",
+   "name": "波托韦洛",
+   "nameEn": "Portobelo",
+   "lat": 9.55,
+   "lon": -79.65,
+   "zone": "caribbean",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "silver",
+    "cocoa"
+   ],
+   "demand": [
+    "cloth",
+    "wine",
+    "grain"
+   ],
+   "note": "地峡北岸的集市港，南方运来的白银在这里堆成山，平时却连口粮都要外运。"
+  },
+  {
+   "id": "veracruz",
+   "name": "韦拉克鲁斯",
+   "nameEn": "Veracruz",
+   "lat": 19.19,
+   "lon": -96.14,
+   "zone": "caribbean",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "silver",
+    "dye"
+   ],
+   "demand": [
+    "wine",
+    "oliveoil",
+    "iron"
+   ],
+   "note": "墨西哥湾的登陆口，高原来的银锭与胭脂虫红在此上船，酒与橄榄油则整船卸下。"
+  },
+  {
+   "id": "salvador",
+   "name": "萨尔瓦多",
+   "nameEn": "Salvador",
+   "lat": -12.97,
+   "lon": -38.5,
+   "zone": "brazil",
+   "tier": 2,
+   "yard": 2,
+   "produce": [
+    "sugar",
+    "tobacco"
+   ],
+   "demand": [
+    "cloth",
+    "wine",
+    "saltfish"
+   ],
+   "note": "全能湾畔的糖业首府，糖厂沿岸排开，干鳕鱼是庄园里最常见的口粮。"
+  },
+  {
+   "id": "recife",
+   "name": "累西腓",
+   "nameEn": "Recife",
+   "lat": -8.05,
+   "lon": -34.88,
+   "zone": "brazil",
+   "tier": 2,
+   "yard": 1,
+   "produce": [
+    "sugar",
+    "dye"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "grain"
+   ],
+   "note": "礁石护着的糖港，砂糖与苏木染料装船，铁器与面粉靠回程船补给。"
+  },
+  {
+   "id": "riodejaneiro",
+   "name": "里约热内卢",
+   "nameEn": "Rio de Janeiro",
+   "lat": -22.91,
+   "lon": -43.17,
+   "zone": "brazil",
+   "tier": 1,
+   "yard": 1,
+   "produce": [
+    "dye",
+    "wood"
+   ],
+   "demand": [
+    "cloth",
+    "iron",
+    "wine"
+   ],
+   "note": "瓜纳巴拉湾里的新兴小港，苏木与硬木砍下就能上船，日用百货全靠外来。"
+  }
+ ],
+ "portMap": [
+  {
+   "old": "baifan",
+   "new": "lisboa",
+   "reason": "主角的家乡港与全剧起点，对应大航海时代真正的远洋出发地；同为本海域最大港与一级船厂。"
+  },
+  {
+   "old": "tiemao",
+   "new": "sevilla",
+   "reason": "旧铁锚城产铁器木材、三级船厂，塞维利亚同样是铁料集散与船队登记地，且紧邻家乡港，短途剧情动线不变。"
+  },
+  {
+   "old": "wujiao",
+   "new": "funchal",
+   "reason": "同为一级小港、产酒，大西洋孤岛的雾角意象与马德拉吻合。"
+  },
+  {
+   "old": "huiyan",
+   "new": "london",
+   "reason": "旧灰岩堡是北方产铁木的三级船厂重镇，伦敦的泰晤士船坞与呢绒铁器产出完全对应，且同样紧缺酒与砂糖。"
+  },
+  {
+   "old": "jingge",
+   "new": "bergen",
+   "reason": "鲸歌湾的北方捕鲸小港意象对应卑尔根，同为一级港，同样紧缺谷物与布匹。"
+  },
+  {
+   "old": "yinhu",
+   "new": "amsterdam",
+   "reason": "顾砚藏身的账房之城，对应北方最大的账房与市场城市；旧银湖港的粮食产出由北海圈内部消化。"
+  },
+  {
+   "old": "hupo",
+   "new": "quanzhou",
+   "reason": "旧琥珀港产丝绸茶叶、二级船厂，泉州的产出与规模完全一致。"
+  },
+  {
+   "old": "cuiyu",
+   "new": "guangzhou",
+   "reason": "旧翠玉港产瓷器丝绸、三级船厂，广州是外销瓷与生丝的总门户。"
+  },
+  {
+   "old": "longgu",
+   "new": "macau",
+   "reason": "龙骨岛为一级港、产茶与药材的岛屿灯塔地，澳门同为珠江口外的半岛小港，骸湾可设为澳门外海的修船湾。"
+  },
+  {
+   "old": "xiangliao",
+   "new": "malacca",
+   "reason": "香料城直接对应海峡上的香料转口大港，同为二级船厂。"
+  },
+  {
+   "old": "chisha",
+   "new": "aceh",
+   "reason": "旧赤砂港是南洋产香料的一级小港，亚齐是海峡西口的胡椒港，保持同海域动线。"
+  },
+  {
+   "old": "shanhu",
+   "new": "banda",
+   "reason": "珊瑚镇是南洋最小的海岛港、粮食铁器全靠外运，班达群岛的处境与规模完全一致（剧情引用最多，务必保持小港气质）。"
+  },
+  {
+   "old": "zhenzhu",
+   "new": "hormuz",
+   "reason": "珍珠湾产珠宝、二级船厂，霍尔木兹就是波斯湾的珍珠市，意象与数值一一对应。"
+  },
+  {
+   "old": "fengyu",
+   "new": "goa",
+   "reason": "风语城是珍珠海的三级船厂与会审举办地，果阿是印度洋的总部级港口与船厂，剧情「须由本海域份额过两成半的商会主持」逻辑照旧成立。"
+  },
+  {
+   "old": "yueya",
+   "new": "mocha",
+   "reason": "月牙港为一级港、产药材，摩卡同为红海口的一级小港，产咖啡与乳香药材。"
+  },
+  {
+   "old": "xingjiao",
+   "new": "portobelo",
+   "reason": "星礁是黄金海的一级小港、紧缺布匹铁器与酒，波托韦洛同为地峡上的一级集市港，需求完全一致。"
+  },
+  {
+   "old": "heishi",
+   "new": "havana",
+   "reason": "黑石港是黄金海的三级船厂大港，哈瓦那是加勒比唯一的三级船厂与船队集结地。"
+  },
+  {
+   "old": "luori",
+   "new": "cartagena",
+   "reason": "落日港是黄金海的二级船厂大港，卡塔赫纳同为二级船厂的大陆海岸要塞港，保证旧海域三港全部落在新加勒比海内。"
+  }
+ ],
+ "zoneMap": [
+  {
+   "oldId": "west",
+   "oldName": "西洋",
+   "newId": "iberia",
+   "newName": "伊比利亚海岸"
+  },
+  {
+   "oldId": "north",
+   "oldName": "北海",
+   "newId": "northeu",
+   "newName": "北海"
+  },
+  {
+   "oldId": "east",
+   "oldName": "东海",
+   "newId": "eastasia",
+   "newName": "东海"
+  },
+  {
+   "oldId": "south",
+   "oldName": "南洋",
+   "newId": "nanyang",
+   "newName": "南洋"
+  },
+  {
+   "oldId": "pearl",
+   "oldName": "珍珠海",
+   "newId": "indocean",
+   "newName": "印度洋"
+  },
+  {
+   "oldId": "gold",
+   "oldName": "黄金海",
+   "newId": "caribbean",
+   "newName": "加勒比海"
+  }
+ ],
+ "victory": {
+  "zonesRequired": 6,
+  "reason": "海域从 6 个扩到 10 个，而真实地图上的航程是原来的十几倍：要求十海全占会把通关时间拉到不可接受的长度，也逼玩家做重复的巡海刷份额。定 6/10（过半且有余量）刚好对应一条完整的战略路线——例如「伊比利亚+地中海+北海+几内亚湾+加勒比+巴西」的大西洋霸权，或「伊比利亚+印度洋+南洋+东海+黎凡特+地中海」的东方航路霸权，两条路线长度相当但体验完全不同，重开一局有新鲜感。结算改法：把 game.js 的 ZONES.every(...) 换成统计 ZONES.filter(z => S.share[z.id].player >= 50).length >= VICTORY.zonesRequired，并在顶栏常驻显示「已主导 X/6」，玩家随时知道还差几片海。另外建议保留一条隐藏成就『十海归一』：十片全占给一个称号与结局文本，满足想通关到底的玩家。"
+ },
+ "rivalHomes": [
+  {
+   "rival": "whale",
+   "zone": "northeu",
+   "reason": "蓝鲸商会原本盘踞北海，新北海-波罗的海圈是粮食木材毛皮的大宗货源与北方船坞带，最适合一家靠运力与资本吃饭的老牌商会；玩家开局在伊比利亚，第一个撞上的对手就是它，与主线里艾丽丝最早出场吻合。"
+  },
+  {
+   "rival": "redsail",
+   "zone": "nanyang",
+   "reason": "红帆同盟旧本营是南洋，新南洋仍是香料群岛，价差最极端、武装冲突最频繁，契合赫克托的武力路线；也保证主线「珊瑚镇/班达」一线的对抗强度不变。"
+  },
+  {
+   "rival": "goldsand",
+   "zone": "caribbean",
+   "reason": "金沙公司旧本营黄金海按 zoneMap 迁到加勒比海，白银与宝石的出口口岸正是一家做金融与账房的商会该守的地方，萨利姆「只是账房」的设定与银船队的角色对得上。"
+  }
+ ],
+ "balanceNotes": "【1｜距离换算：先把逻辑距离换成公里】现在 voyageDays 用的是 900×560 逻辑坐标的 hypot。改成经纬度后必须先做等距圆柱的公里近似，否则高纬度会被严重拉长：dx =(lon2-lon1)*111*cos((lat1+lat2)/2 弧度)，dy=(lat2-lat1)*111，dist=hypot(dx,dy)（单位 km）。建议 dayDistance() = fleetSpeed() * 30（基准速度 6 → 180 km/日，沈鹭 +1 → 210，风暴 ×0.72）。校准结果：里斯本→塞维利亚 400km≈2 天，里斯本→丰沙尔 1000km≈6 天，里斯本→伦敦 1600km≈9 天，威尼斯→贝鲁特 2400km≈13 天，里斯本→哈瓦那 7000km≈39 天，里斯本→果阿（直线）8600km≈48 天，广州→长崎 1700km≈10 天。近海 2–13 天、跨洋 30–50 天的节奏，正好把「新手区短途密集 / 远洋高利润」拉开。\n\n【2｜补给是远洋的真正门槛，必须靠中继港解决】dailySupply = ceil(crew/10)：60 人船队跑 48 天要 288 格补给，小帆船 60 格货舱根本装不下——这是设计意图，不是 bug。地图已经铺好三条合法中继链，请确保 UI 在航线规划时提示：①好望角线 里斯本→丰沙尔→佛得角→圣多美→蒙巴萨→摩卡/果阿，单段 6–22 天；②美洲线 里斯本/塞维利亚→佛得角→累西腓/萨尔瓦多→卡塔赫纳→波托韦洛→哈瓦那；③东方线 果阿→卡利卡特→默苏利珀德姆→亚齐→马六甲→马尼拉/广州→长崎。同时建议把 dailySupply 改为 max(1, ceil(totalCrew()/12))，并把补给单价从 3 提到 4，否则跨洋一趟的补给成本低到可以忽略。\n\n【3｜份额换算必须整体放大，否则一单就打穿】transferShare(zone,'player', q*pr/6000) 是按旧地图的小额交易调的。新表里一次长途卖货动辄 10 万金币（100 单位白银 ×1071），一单就能拿 17 点份额，海域主导会在第二年就崩盘。建议把除数改到 25000，并对单次交易的份额增量封顶 2.5 点；invest 的 pts = amt/(400+10*cur) 改成 amt/(900+25*cur)。海域主导月收益 share*40 在 10 海域下会滚雪球，建议降到 *28。对手每月 rand(0.8,2.6) 的扩张摊到 10 个海域后压力太小，建议改成每月挑 2 个海域各 rand(1.0,3.0)，且本营海域权重加倍——否则玩家可以慢慢刷，胜利毫无紧迫感。\n\n【4｜三条「无空舱」黄金三角，是全局经济的骨架】刻意让每个海域同时具备强产出篮子与强需求篮子，任何一段航程都不该空舱返航：①东亚三角（约 9000km，中期最优）广州买丝绸→长崎卖（丝绸单位毛利约 255）→长崎买白银→马六甲/果阿卖（白银单位毛利约 686）→马六甲买香料→广州卖（香料毛利约 196）；②大西洋三角 伦敦/安特卫普买呢绒铁器→埃尔米纳/圣多美卖→买象牙砂糖→里斯本/安特卫普卖→装酒与橄榄油南下；③银糖三角 塞维利亚买油铁→韦拉克鲁斯/波托韦洛卖→买白银染料→塞维利亚/威尼斯卖。注意：日本白银的亚洲买家被刻意设在马六甲、果阿、卡利卡特、亚齐（4600–9000km），广州、泉州、澳门一律不收白银——否则长崎↔澳门 1700km 就能刷出 686/单位的双向暴利，整张图的远洋设计会被一条短线废掉。\n\n【5｜低价差短线专供新手，高价差一律拉长】谷物(20)、咸鱼(35)、木材(30)这类低基准货刻意放在短线上：格但斯克粮→卑尔根(1100km)、亚历山大粮→伊斯坦布尔(1150km)、马尼拉米→班达(2000km)、突尼斯皮革→马赛(900km)、威尼斯玻璃→贝鲁特(2400km)。单位毛利只有 20–70，够新手糊口但不可能暴富。600 以上的珠宝白银全部只出现在 3000km 以上的航段。相邻港口（广州/澳门/泉州、里斯本/塞维利亚、卡塔赫纳/波托韦洛、萨尔瓦多/累西腓、吕贝克/格但斯克、果阿/卡利卡特）已逐对检查过，没有任何一对互为特产与紧缺，不存在贴脸刷钱位。\n\n【6｜月薪与负债，随航程一起重算】现在 wages = crew*4/月。一次 50 天的东方航程只花 2 个月薪水，100 人船队约 800 金币，相对丝绸白银的收益可以忽略。建议把远洋阶段的压力放在补给与修船上而不是薪水上：保留 crew*4，但给「在海上过月」额外加 20% 海上加给（船员在港停泊不加），这样长时间漂在海上有代价，回港补给有奖励，也顺带鼓励玩家用中继港。负债阈值 -5000 建议随船队规模浮动，改为 -(2000 + fleetValue()*0.1)。\n\n【7｜地图表现（直接回应玩家提的三个痛点）】①港口规模看不出来：tier 字段已经给了，建议地图上按 tier 画三档圆点（1 小圆点 / 2 中圆 + 港名 / 3 大圆 + 底色光晕 + 常驻港名），yard 字段单独用一个小铁砧或桅杆图标叠在港点右上角，yard=3 的 8 个港（里斯本、威尼斯、伊斯坦布尔、伦敦、阿姆斯特丹、果阿、广州、哈瓦那）用金色铁砧——玩家想买盖伦或巡防舰时一眼就能看出该去哪，不用一个城一个城点开。②再配一个地图筛选条：「只看三级船厂 / 只看大港 / 只看收 X 货的港」，筛选态下把符合条件的港点放大高亮。③海上 NPC 船只：三家商会的本营海域已在 rivalHomes 固定，可在每个海域按当前 share 比例生成 2–4 艘漫游商船（颜色取 FACTION_COLOR），沿本海域港口之间的直线往返移动；玩家船只进入一定半径时触发遭遇，给「打招呼换情报（免费给一条该商会本营海域的价格情报）/ 高价收购船上某货 / 挑衅 → 海战 / 无视」四个选项，遭遇结果影响该商会好感与该海域份额 ±0.3。海盗则只在玩家与最近港口距离超过 40% 航程时刷新，避免近海骚扰。\n\n【8｜开局参数】起始港 baifan→lisboa，S.ship 初始坐标改为里斯本的经纬度；3000 金币 + 小帆船(60 舱)在伊比利亚圈足够跑通「塞维利亚买橄榄油/铁 → 丰沙尔卖(1200km,6天)」与「里斯本买酒 → 伦敦卖(1600km,9天)」两条启蒙航线，约 3–4 趟可升到纵帆船。share 初始值请按新的 10 海域重铺：iberia 给玩家 15%（家乡），northeu 蓝鲸 65%，nanyang 红帆 65%，caribbean 金沙 65%，其余六海三家各 30% 上下均分、玩家 0%。"
+}
