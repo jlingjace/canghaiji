@@ -129,8 +129,11 @@ function finish(c, ok, quit = false) {
   if (ok) {
     S.ct.done++; S.gold += c.reward;
     const zid = port(c.to).zone;
-    transferShare(zid, 'player', 0.6); checkWin();
-    log(`完成委托「${c.label}」，获得 ${fmt(c.reward)} 金币，${zone(zid).name}份额 +0.6。`, 'gold');
+    // 固定 +0.6 抵不过三家对手每月约 5 点的反推，跑委托这条路永远拿不下一片海。
+    // 改成随报酬缩放：跑大单才有份额意义。
+    const pts = Math.round((0.6 + Math.min(1.9, c.reward / 3500)) * 10) / 10;
+    transferShare(zid, 'player', pts); checkWin();
+    log(`完成委托「${c.label}」，获得 ${fmt(c.reward)} 金币，${zone(zid).name}份额 +${pts}。`, 'gold');
   } else {
     S.ct.failed++;
     // 托运货是货主的：违约时收回实物，短少的部分照价赔偿，另付违约金

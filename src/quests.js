@@ -15,6 +15,7 @@ for (const c of STORY.newChars || []) if (!CHARS[c.key]) CHARS[c.key] = { name: 
 /* ---------- 状态 ---------- */
 export function ensureQuestState() {
   if (!S.q) S.q = { status: {}, progress: {}, declined: {}, prologueDone: false, offeredOnce: {} };
+  if (!S.q.latched) S.q.latched = {};      // 已达成过的任务目标，锁存后不随状态倒退
 }
 export const qStatus = id => (S.q && S.q.status[id]) || 'locked';
 export function prereqMet(q) {
@@ -47,8 +48,21 @@ export function objValue(q, i) {
     default: return pr;
   }
 }
-export const objDone = (q, i) => objValue(q, i) >= objTarget(q.objectives[i]);
-export const questObjectivesDone = q => q.objectives.every((_, i) => objDone(q, i));
+export const objDone = (q, i) => !!(S.q && S.q.latched && S.q.latched[q.id]) || objValue(q, i) >= objTarget(q.objectives[i]);
+/**
+ * 目标是否全部达成。
+ * 「持有 N 金币」「份额达到 N」「船队达到 N 艘」这类目标读的是**实时状态**，
+ * 会随着你花钱买船、对手反推而倒退回去——于是玩家被告知「可交付」，赶到交付港，
+ * 交付却悄无声息地什么都没发生，而且这条主线还卡着后面的前置。
+ * 所以一旦全部达成就锁存下来，之后状态怎么变都算数。
+ */
+export const questObjectivesDone = q => {
+  ensureQuestState();
+  if (S.q.latched && S.q.latched[q.id]) return true;
+  if (!q.objectives.every((_, i) => objValue(q, i) >= objTarget(q.objectives[i]))) return false;
+  (S.q.latched || (S.q.latched = {}))[q.id] = S.day + 1;   // +1：第 0 天达成时 0 是假值，会让锁存失效
+  return true;
+};
 function bump(q, i, v, set = false) {
   const arr = S.q.progress[q.id] || (S.q.progress[q.id] = q.objectives.map(() => 0));
   arr[i] = set ? Math.max(arr[i], v) : arr[i] + v;

@@ -113,6 +113,10 @@ function planVoyage(pid) {
   if (S.supplies >= need) add('ok', '补给', `${S.supplies} / 需要约 ${need}（日耗 ${g.dailySupply()}）`);
   else if (S.supplies >= need * 0.7) add('warn', '补给', `${S.supplies} / 需要约 ${need}，勉强够，建议补到 ${need + g.dailySupply() * 3}`);
   else add('bad', '补给', `只有 ${S.supplies}，需要约 ${need}。撑到第 ${Math.max(1, Math.floor(S.supplies / g.dailySupply()))} 天断粮，之后 ${g.HUNGER_GRACE} 天半口粮，再往后每天减员`);
+  const guns = g.totalCannons ? g.totalCannons() : S.fleet.reduce((a, sh) => a + sh.cannons, 0);
+  const bare = S.fleet.filter(sh => sh.cannons < T(sh).cannons * 0.35);
+  if (bare.length) add('warn', '火炮', `${bare.map(x => x.name).join('、')} 火炮不足四成，遇上海盗很吃亏（造船厂 150 金币/门）`);
+  else add('ok', '火炮', `全队 ${guns} 门，武装充足`);
   const hurt = S.fleet.filter(sh => sh.hp < T(sh).hp * 0.5);
   if (hurt.length) add('warn', '船体', `${hurt.map(x => x.name).join('、')} 耐久不足一半，遇上海盗很危险`);
   else add('ok', '船体', '各船耐久良好');
@@ -384,7 +388,15 @@ function guidance() {
   const act = C.activeContracts().filter(c => C.daysLeft(c) <= 3);
   const ready = Q.QUESTS.filter(q => Q.qStatus(q.id) === 'ready');
   const nm = Q.nextMain();
-  if (S.supplies < g.dailySupply() * 4 && !S.dest) { txt = `补给只剩 ${S.supplies}，在市场补满再出航`; cls = 'bad'; }
+  const broke = S.gold < 200 && !S.dest && g.cargoUsed() - S.supplies <= 0;
+  if (broke) {
+    const ways = [];
+    if (S.fleet.length > 1) ways.push('卖掉一艘船');
+    if (S.fleet.some(sh => sh.cannons > 0)) ways.push('拆炮换钱（75/门）');
+    ways.push('接一张运货委托（货由货主装船，不用本金）');
+    txt = `手头没钱也没货：${ways.join('，或')}`; cls = 'bad';
+  }
+  else if (S.supplies < g.dailySupply() * 4 && !S.dest) { txt = `补给只剩 ${S.supplies}，在市场补满再出航`; cls = 'bad'; }
   else if (act.length) { txt = `委托「${act[0].label}」只剩 ${C.daysLeft(act[0])} 天`; cls = 'warn'; }
   else if (ready.length) { txt = `「${ready[0].title}」可交付 → ${port(ready[0].turnIn).name}`; cls = 'gold'; }
   else if (nm && Q.qStatus(nm.id) === 'active') { const o = nm.objectives.find((_, i) => !Q.objDone(nm, i)); txt = `主线「${nm.title}」：${o ? o.label : '前往交付'}`; cls = 'gold'; }
@@ -487,7 +499,8 @@ function renderMarket(p) {
 }
 function renderYard(p) {
   const forSale = YARD_SHIPS[p.yard].map(t => { const s = SHIP_TYPES[t];
-    return `<tr><td><b>${s.name}</b></td><td class="r">${s.cargo}</td><td class="r">${s.hp}</td><td class="r">${s.cannons}</td><td class="r">${s.speed}</td><td class="r">${s.crew}</td><td class="r gold">${fmt(s.price)}</td><td><button class="btn sm" data-a="buyShip" data-t="${t}" ${S.gold < s.price ? 'disabled' : ''}>购买</button></td></tr>`; }).join('');
+    const cost = g.shipCost(t), o = g.outfitOf(s);
+    return `<tr><td><b>${s.name}</b></td><td class="r">${s.cargo}</td><td class="r">${s.hp}</td><td class="r">${o.cannons}/${s.cannons}</td><td class="r">${s.speed}</td><td class="r">${o.crew}/${s.crew}</td><td class="r gold">${fmt(cost)}</td><td><button class="btn sm" data-a="buyShip" data-t="${t}" ${S.gold < cost ? 'disabled' : ''}>购买</button></td></tr>`; }).join('');
   const mine = S.fleet.map((sh, i) => { const t = T(sh); const rc = (t.hp - sh.hp) * 4;
     return `<div class="card"><div class="row"><b>${sh.name}</b><span class="muted">${t.name}</span><span class="spacer"></span><span class="muted">售价 ${fmt(g.shipRefund(sh))}</span></div>
       <div class="hpbar"><i style="width:${sh.hp / t.hp * 100}%"></i></div>
@@ -499,8 +512,8 @@ function renderYard(p) {
         <button class="btn sm" data-a="removeCannon" data-i="${i}" data-q="5">−5 炮</button>
         <button class="btn sm danger" data-a="sellShip" data-i="${i}" ${S.fleet.length > 1 ? '' : 'disabled'}>出售</button>
       </div></div>`; }).join('');
-  return `<h3>出售船只</h3><div class="scroll"><table><thead><tr><th>船型</th><th class="r">载货</th><th class="r">耐久</th><th class="r">炮位</th><th class="r">航速</th><th class="r">船员</th><th class="r">价格</th><th></th></tr></thead><tbody>${forSale}</tbody></table></div>
-    <p class="muted" style="font-size:12px">${p.yard < 3 ? `更大的船只需要在 3 级造船厂购买（${PORTS.filter(x => x.yard === 3).map(x => x.name).join('、')}）。` : '这里可以买到所有船型。'}新船不含火炮与船员。</p>
+  return `<h3>出售船只</h3><div class="scroll"><table><thead><tr><th>船型</th><th class="r">载货</th><th class="r">耐久</th><th class="r">火炮</th><th class="r">航速</th><th class="r">船员</th><th class="r">成交价</th><th></th></tr></thead><tbody>${forSale}</tbody></table></div>
+    <p class="muted" style="font-size:12px">${p.yard < 3 ? `更大的船只需要在 3 级造船厂购买（${PORTS.filter(x => x.yard === 3).map(x => x.name).join('、')}）。` : '这里可以买到所有船型。'}「火炮 / 船员」两列写的是<b>出厂配置 / 满编上限</b>，成交价已含这份基础武装；补满火炮 150 金币一门、船员 25 金币一人。</p>
     <h3>我的船只 <button class="btn sm" data-a="repairAll">全部修理</button></h3>${mine}`;
 }
 function renderTavern(p) {

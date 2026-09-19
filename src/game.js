@@ -215,6 +215,15 @@ export function monthTick() {
   for (const k of REP_KEYS) { const v = S.rep[k] || 0; S.rep[k] = Math.abs(v) < 1 ? 0 : Math.round(v - Math.sign(v) * Math.max(0.5, Math.abs(v) * 0.03)); }
   log(`月结：支付船员薪酬 ${fmt(wages)}${income ? `，海域主导收益 +${fmt(income)}` : ''}。`, income ? 'good' : '');
   if (S.gold < -5000) { for (const sh of S.fleet) sh.crew = Math.max(crewFloor(sh), Math.floor(sh.crew * 0.8)); log('商会严重负债，大量船员弃船而去！', 'bad'); }
+  // 债务兜底：欠太多又没船可卖的话，行会会直接扣一艘船抵债。
+  // 没有这一道，玩家会卡在「没钱买货 → 赚不到钱 → 薪酬继续扣」的死循环里出不来。
+  if (S.gold < -8000 && S.fleet.length > 1) {
+    let worst = 0;
+    for (let i = 1; i < S.fleet.length; i++) if (shipRefund(S.fleet[i]) < shipRefund(S.fleet[worst])) worst = i;
+    const sh = S.fleet[worst], take = shipRefund(sh);
+    S.fleet.splice(worst, 1); S.gold += take; fitCargo();
+    log(`债务压顶，行会扣走 ${T(sh).name}「${sh.name}」抵债，作价 ${fmt(take)} 金币。`, 'bad');
+  }
 }
 
 /* ========= 声望 ========= */
@@ -285,12 +294,13 @@ export function makeEnemy(kind) {
   let pool, n, names, cannonBudget, crewBudget, hpBudget;
   if (kind === 'pirate') {
     pool = fv < 8000 ? ['sloop'] : fv < 20000 ? ['sloop', 'schooner'] : fv < 50000 ? ['schooner', 'merchant'] : ['schooner', 'merchant', 'galleon', 'frigate'];
-    n = fv < 8000 ? 1 : clamp(randInt(1, S.fleet.length + 1), 1, 4); names = ['黑旗号', '骷髅号', '怒涛号', '血月号', '秃鹫号', '毒鳐号'];
-    cannonBudget = Math.max(3, Math.round(myCannons * rand(0.6, 1.1))); crewBudget = Math.max(8, Math.round(myCrew * rand(0.7, 1.1))); hpBudget = Math.max(60, Math.round(myHp * rand(0.6, 1.0)));
+    n = fv < 8000 ? 1 : clamp(randInt(Math.max(1, S.fleet.length - 1), S.fleet.length + 1), 1, 5); names = ['黑旗号', '骷髅号', '怒涛号', '血月号', '秃鹫号', '毒鳐号'];
+    cannonBudget = Math.max(3, Math.round(myCannons * rand(0.75, 1.15))); crewBudget = Math.max(8, Math.round(myCrew * rand(0.8, 1.15))); hpBudget = Math.max(60, Math.round(myHp * rand(0.75, 1.15)));
   } else {
+    // 商会船队是「硬仗」：数量、火力、耐久都要压过玩家一头，否则装满炮之后海战全是碾压
     pool = fv < 12000 ? ['schooner', 'merchant'] : fv < 45000 ? ['schooner', 'merchant', 'galleon'] : ['merchant', 'galleon', 'frigate'];
-    n = clamp(randInt(2, S.fleet.length + 2), 2, 5); names = ['旗舰', '护航舰', '武装商船', '运输船', '巡逻舰'];
-    cannonBudget = Math.max(8, Math.round(myCannons * rand(0.8, 1.15)) + 4); crewBudget = Math.max(30, Math.round(myCrew * rand(0.9, 1.2)) + 8); hpBudget = Math.max(200, Math.round(myHp * rand(0.9, 1.25)));
+    n = clamp(randInt(S.fleet.length, S.fleet.length + 2), 2, 5); names = ['旗舰', '护航舰', '武装商船', '运输船', '巡逻舰'];
+    cannonBudget = Math.max(10, Math.round(myCannons * rand(1.0, 1.3)) + 6); crewBudget = Math.max(30, Math.round(myCrew * rand(1.0, 1.3)) + 10); hpBudget = Math.max(200, Math.round(myHp * rand(1.1, 1.45)));
   }
   return Array.from({ length: n }, (_, i) => {
     const t = pick(pool), tt = SHIP_TYPES[t]; const hp = clamp(Math.round(hpBudget / n * rand(0.8, 1.2)), 40, tt.hp);
@@ -397,10 +407,20 @@ export function buySupplies(q) {
   hooks.render();
 }
 export function sellSupplies(q) { q = Math.min(+q, S.supplies); if (q <= 0) return; S.supplies -= q; S.gold += q; hooks.render(); }
+/** 新船的基础武装：出厂即带四成火炮与半数船员，这笔钱含在成交价里 */
+export const outfitOf = t => ({ cannons: Math.round(t.cannons * 0.4), crew: Math.round(t.crew * 0.5) });
+export function shipCost(type) {
+  const t = SHIP_TYPES[type], o = outfitOf(t);
+  return t.price + o.cannons * 150 + o.crew * 25;
+}
 export function buyShip(type) {
-  const t = SHIP_TYPES[type]; if (S.gold < t.price) return hooks.toast('金币不足');
+  const t = SHIP_TYPES[type], cost = shipCost(type);
+  if (S.gold < cost) return hooks.toast('金币不足');
   if (S.fleet.length >= 6) return hooks.toast('船队最多 6 艘');
-  S.gold -= t.price; S.fleet.push(mkShip(type, nextShipName())); log(`购入 ${t.name}「${S.fleet.at(-1).name}」。记得到酒馆招募船员。`, 'good'); hooks.render();
+  const o = outfitOf(t);
+  S.gold -= cost; S.fleet.push(mkShip(type, nextShipName(), o));
+  log(`购入 ${t.name}「${S.fleet.at(-1).name}」，含 ${o.cannons} 门炮与 ${o.crew} 名船员。满编要 ${t.cannons} 门炮、${t.crew} 人——到造船厂补炮、酒馆补人。`, 'good');
+  hooks.render();
 }
 export function shipRefund(sh) { return Math.round(T(sh).price * 0.6 * (sh.hp / T(sh).hp)) + sh.cannons * 75; }
 export function sellShip(i) {

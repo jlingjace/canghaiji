@@ -107,7 +107,28 @@ function topUpSupplies(days) {
   if (g.S.supplies < need) g.buySupplies(Math.min(capacityFree(), need - g.S.supplies));
 }
 function hireAll() { g.S.fleet.forEach((sh, i) => g.hire(i, g.T(sh).crew - sh.crew)); }
+/** 新买的船是 0 门炮的，真人玩家会先装满再出海 */
+function armAll() { g.S.fleet.forEach((sh, i) => { const want = g.T(sh).cannons - sh.cannons; if (want > 0) g.addCannon(i, want); }); }
+/** 净资产 = 现金 + 船队估值 + 舱里货物按当前港的卖价估 */
+function netWorth() {
+  const here = g.port(g.S.pos);
+  let cargo = 0;
+  for (const [gid, q] of Object.entries(g.S.cargo)) cargo += g.quote(here, gid, q, 'sell').total;
+  return Math.round(g.S.gold + g.fleetValue() + cargo);
+}
 function repairAll() { g.repairAll(); }
+
+/** 破产自救的完整顺序：先接零本金的运货委托，再拆炮，最后卖船 */
+function raiseCash() {
+  if (takeFreightForCash()) return true;
+  const S = g.S;
+  if (S.gold < 500) {
+    const i = S.fleet.findIndex(sh => sh.cannons > 4);
+    if (i >= 0) { g.removeCannon(i, S.fleet[i].cannons - 4); mark('破产后拆炮换钱'); return true; }
+    if (S.fleet.length > 1) { let w = 1; for (let k = 1; k < S.fleet.length; k++) if (g.shipRefund(S.fleet[k]) < g.shipRefund(S.fleet[w])) w = k; g.sellShip(w); mark('破产后卖船换钱'); return true; }
+  }
+  return false;
+}
 
 /** 没钱买货时的自救：接一张运货委托，货是委托方装的，不用本金 */
 function takeFreightForCash() {
@@ -160,9 +181,9 @@ function investIfRich() {
 
 function stepTrade() {
   const S = g.S;
-  repairAll(); hireAll(); upgradeFleet(); investIfRich();
+  repairAll(); hireAll(); armAll(); upgradeFleet(); investIfRich();
   const run = bestRun();
-  if (!run) { if (!takeFreightForCash()) g.rest(5); return; }
+  if (!run) { if (!raiseCash()) g.rest(5); return; }
   g.buy(run.good, run.qty);
   topUpSupplies(run.days + 4);
   if (!sail(run.dest)) return;
@@ -171,7 +192,7 @@ function stepTrade() {
 
 function stepContract() {
   const S = g.S;
-  repairAll(); hireAll(); upgradeFleet(); investIfRich();
+  repairAll(); hireAll(); armAll(); upgradeFleet(); investIfRich();
   const board = C.boardFor(S.pos).filter(c => !C.isTaken(c.id) && !C.isClosed(c.id));
   for (const c of board) {
     if (S.ct.active.length >= 1) break;
@@ -190,8 +211,28 @@ function stepContract() {
     g.buy(target.good, target.qty - (g.S.cargo[target.good] || 0));
     topUpSupplies(20); sail(target.to); return;
   }
+  // 真人玩家不会空着舱跑委托：顺路的货能带就带
+  fillHoldTowards(target.to);
   topUpSupplies(20);
+  const carried = Object.keys(g.S.cargo).filter(k => g.sellable(k) > 0);
   sail(target.to);
+  for (const k of carried) if (g.sellable(k) > 0) g.sell(k, 'all');
+}
+
+/** 顺路捎货：在剩余舱位里装一批能在目的地卖出更高价的货 */
+function fillHoldTowards(destId) {
+  const S = g.S, here = g.port(S.pos), dest = g.port(destId);
+  if (!dest) return;
+  let space = capacityFree() - Math.ceil(g.dailySupply() * 25);
+  if (space < 8) return;
+  let best = null;
+  for (const gd of GOODS) {
+    const q = Math.min(space, g.maxAffordable(here, gd.id, Math.max(0, S.gold * 0.7), space));
+    if (q < 5) continue;
+    const profit = g.quote(dest, gd.id, q, 'sell').total - g.quote(here, gd.id, q, 'buy').total;
+    if (profit > 0 && (!best || profit > best.profit)) best = { gid: gd.id, q, profit };
+  }
+  if (best) g.buy(best.gid, best.q);
 }
 
 /** 抵港时把这里能接的任务都接下来（真人玩家会这么做） */
@@ -200,7 +241,7 @@ function takeQuestsHere() {
 }
 function stepQuest() {
   const S = g.S;
-  repairAll(); hireAll(); upgradeFleet(); investIfRich();
+  repairAll(); hireAll(); armAll(); upgradeFleet(); investIfRich();
   takeQuestsHere(); Q.checkQuests();
   const ready = Q.QUESTS.filter(q => Q.qStatus(q.id) === 'ready')[0];
   if (ready && ready.turnIn) { topUpSupplies(30); sail(ready.turnIn); return; }
@@ -253,12 +294,19 @@ while (g.S.day < MAX_DAY && !g.S.won) {
     const rid = ['whale', 'redsail', 'goldsand'][Math.floor(Math.random() * 3)];
     resolveBattle(kind, kind === 'rival' ? rid : null, g.makeEnemy(kind), g.port(g.S.pos).zone);
   }
-  if (g.S.day === before) { if (++stuck > 20) { log.notes.push(`第 ${g.S.day} 天：连续 20 回合没有推进时间，提前结束`); break; } g.rest(3); }
-  else stuck = 0;
+  if (g.S.day === before) {
+    if (++stuck === 20) {
+      // 记下卡住时的现场，再继续跑——提前结束会掩盖后面的问题
+      const act = Q.QUESTS.filter(q => Q.qStatus(q.id) === 'active').map(q => q.id + ':' + (q.objectives.find((_, i) => !Q.objDone(q, i)) || {}).kind);
+      const rdy = Q.QUESTS.filter(q => Q.qStatus(q.id) === 'ready').map(q => q.id + '→' + q.turnIn);
+      log.notes.push(`第 ${g.S.day} 天卡住：在 ${g.S.pos}，金 ${Math.round(g.S.gold)}，空舱 ${g.freeSpace()}｜进行中 ${act.join(',') || '无'}｜可交付 ${rdy.join(',') || '无'}｜委托 ${g.S.ct.active.length}`);
+    }
+    g.rest(3);
+  } else stuck = 0;
 
   if (g.S.day - lastDay >= 90) {
     lastDay = g.S.day;
-    log.daily.push({ day: g.S.day, year: +(g.S.day / 360).toFixed(1), gold: Math.round(g.S.gold), fleet: g.S.fleet.length,
+    log.daily.push({ day: g.S.day, year: +(g.S.day / 360).toFixed(1), gold: Math.round(g.S.gold), net: netWorth(), fleet: g.S.fleet.length,
       fleetValue: g.fleetValue(), zones: zoneLead(), quests: Q.QUESTS.filter(q => Q.qStatus(q.id) === 'done').length,
       contracts: g.S.ct.done, battles: g.S.stats.battles, wins: g.S.stats.wins });
   }
@@ -279,7 +327,7 @@ const out = {
   策略: STRATEGY, 种子: arg('seed', 1),
   结局: S.won ? '通关' : `${YEARS} 年内未通关`,
   总天数: S.day, 总年数: +(S.day / 360).toFixed(1), 回合数: turns,
-  金币: Math.round(S.gold), 船队: S.fleet.length, 船队估值: g.fleetValue(),
+  金币: Math.round(S.gold), 净资产: netWorth(), 船队: S.fleet.length, 船队估值: g.fleetValue(),
   主导海域: `${zoneLead()}/${ZONES.length}（需 ${6}）`,
   完成任务: `${Q.QUESTS.filter(q => Q.qStatus(q.id) === 'done').length}/${Q.QUESTS.length}`,
   完成委托: S.ct.done, 违约委托: S.ct.failed,
