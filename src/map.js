@@ -113,6 +113,7 @@ export class WorldMap {
 
     // 其他场景
     this.port = new PortScene(this.app, this.shipTex); this.app.stage.addChild(this.port.root);
+    this.port.preload();                       // 手绘背景板后台加载，不挡开局
     this.battle = new BattleScene(this.app, this.shipTex, this.waterFrames); this.app.stage.addChild(this.battle.root);
     this.weather = new WeatherLayer(this.app); this.app.stage.addChild(this.weather.root);
 

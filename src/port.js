@@ -1,9 +1,10 @@
 /* 港口场景：运行时生成的像素街景 + 建筑热区 + 路人 / 海鸥 / 旗子 / 烟 / 浪花动画（全部原创） */
-import { Container, Sprite, Graphics, Text } from 'pixi.js';
+import { Assets, Container, Sprite, Graphics, Text } from 'pixi.js';
 import { S, hooks, port, zone } from './game.js';
 import { canvasTexture, pixelsToCanvas } from './pixelart.js';
 import { seeded, hash, clamp } from './util.js';
 import * as A from './art.js';
+import { PORT_BG_ART } from './art_assets.js';
 
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
 const BASE_W = 480, BASE_H = 300;   // 场景内部分辨率：像素更细，才画得下屋檐、窗台、招牌
@@ -62,6 +63,8 @@ export class PortScene {
   constructor(app, shipTex) {
     this.app = app; this.shipTex = shipTex;
     this.root = new Container(); this.root.visible = false;
+    // 手绘背景板不能放进 this.scene——那一层带着 K 倍整数缩放，绘画会被放成马赛克
+    this.artLayer = new Container(); this.artLayer.eventMode = 'none'; this.root.addChild(this.artLayer);
     this.scene = new Container(); this.root.addChild(this.scene);
     this.labels = new Container(); this.labels.eventMode = 'none'; this.root.addChild(this.labels);
     this.pid = null; this.size = ''; this.t = 0; this.hover = null;
@@ -69,6 +72,37 @@ export class PortScene {
     this.gullTex = GULL_ROWS.map(r => canvasTexture(pixelsToCanvas(r, { w: '#f4f4f4', b: '#888' }, 1)));
     this.cloudTex = canvasTexture(pixelsToCanvas(CLOUD_ROWS, { w: '#f6f8fb' }, 1));
     this.resizeT = 0;
+    this.bgTex = {};                       // 风格 → 已加载的贴图
+  }
+
+  /** 预加载所有已有的手绘背景板；没加载完就先用程序化画法，不阻塞开局 */
+  async preload() {
+    const list = Object.values(PORT_BG_ART).map(v => v.src);
+    if (!list.length) return;
+    try {
+      const got = await Assets.load(list);
+      for (const [k, v] of Object.entries(PORT_BG_ART)) if (got[v.src]) this.bgTex[k] = got[v.src];
+      if (this.pid) { const keep = this.pid; this.pid = null; this.show(keep); }
+    } catch (e) { /* 加载失败就继续用程序化背景 */ }
+  }
+
+  /** 按「覆盖画布 + 底部对齐」摆放背景板，并把美术对齐线换算成场景坐标 */
+  placeArt(art, tex, vw, vh, K) {
+    this.artLayer.removeChildren().forEach(c => c.destroy());
+    const iw = tex.width, ih = tex.height;
+    const sc = Math.max(vw / iw, vh / ih);
+    const dw = iw * sc, dh = ih * sc;
+    const ox = (vw - dw) / 2, oy = vh - dh;      // 底部对齐：码头与水面一定在画面里
+    const spr = new Sprite(tex); spr.position.set(ox, oy); spr.scale.set(sc);
+    this.artLayer.addChild(spr);
+    const toScene = f => (oy + dh * f) / K;
+    const toSceneX = f => (ox + dw * f) / K;
+    return {
+      groundY: Math.round(toScene(art.ground)),
+      seaY: Math.round(toScene(art.sea)),
+      topY: Math.round(toScene(art.top)),
+      spots: art.spots.map(([a, b]) => [Math.round(toSceneX(a)), Math.round(toSceneX(b))]),
+    };
   }
 
   /* ---------- 进入某港口 ---------- */
@@ -87,17 +121,24 @@ export class PortScene {
     this.labels.removeChildren().forEach(c => c.destroy({ children: true }));
     this.scene.scale.set(K);
     const p = port(this.pid), st = styleOf(p), rng = seeded(hash(p.id) + 11);
-    const horizon = Math.round(H * 0.34), groundY = Math.round(H * 0.72), seaY = Math.round(H * 0.855);
+    // 有手绘背景板就用画的，对齐线从素材清单读；没有就走下面的程序化画法
+    const styleKey = zone(p.zone)?.style || 'iberian';
+    const art = PORT_BG_ART[styleKey], artTex = art && this.bgTex[styleKey];
+    const L = artTex ? this.placeArt(art, artTex, vw, vh, K) : null;
+    if (!artTex) this.artLayer.removeChildren().forEach(c => c.destroy());
+    let horizon = Math.round(H * 0.34), groundY = Math.round(H * 0.72), seaY = Math.round(H * 0.855);
+    if (L) { groundY = L.groundY; seaY = L.seaY; horizon = Math.round(L.topY * 0.6); }
     const townY = Math.round(H * 0.58), wallY = townY;    // 中景城镇的地平 / 城墙顶
     this.groundY = groundY; this.seaY = seaY;
 
-    /* ===== 背景画布：从远到近一层层画上去 ===== */
+    /* ===== 背景画布：从远到近一层层画上去（只在没有手绘背景板时执行）===== */
     const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
     const x = cv.getContext('2d');
     const px = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), Math.max(0, Math.round(w)), Math.max(0, Math.round(h))); };
     const N = A.makeNoise(hash(p.id) + 7);
     const skyLow = st.sky[1];
 
+    if (!L) {
     /* --- 天空：抖动渐变 + 太阳与辉光 --- */
     A.ditherGradient(x, 0, 0, W, horizon + 6, st.sky[0], skyLow, 16);
     const sunX = Math.round(W * 0.22), sunY = Math.round(horizon * 0.34);
@@ -200,9 +241,18 @@ export class PortScene {
     }
     px(0, groundY, W, 1, A.shade(st.ground, 0.30));
 
+    }  // ← 程序化背景到此为止
+
     /* ===== 主体建筑 ===== */
     this.hot = []; this.windows = []; this.flagPos = null; this.smokePos = null;
     const slots = [0.04, 0.285, 0.53, 0.775].map(f => Math.round(W * f));
+    if (L) {
+      // 建筑已经画在背景里了，这里只按清单给出的横向范围摆热区
+      BUILDINGS.forEach((b, i) => {
+        const [x0, x1] = L.spots[i];
+        this.hot.push({ ...b, rect: { x: x0, y: L.topY, w: x1 - x0, h: groundY - L.topY } });
+      });
+    } else {
     const widths = [Math.round(W * 0.20), Math.round(W * 0.18), Math.round(W * 0.20), Math.round(W * 0.21)];
     const lean = [3, -4, 0, 5];                        // 前后进退：正数更靠前（基线更低、更大）
     BUILDINGS.forEach((b, i) => {
@@ -213,6 +263,9 @@ export class PortScene {
       this.hot.push({ ...b, rect: { x: bx - 4, y: by - h - info.roofH, w: w + 8, h: h + info.roofH + 2 } });
     });
 
+    }
+
+    if (!L) {
     /* --- 码头边缘 + 系缆桩 --- */
     px(0, seaY - 5, W, 5, A.shade('#6a5a42', 0.10));
     px(0, seaY - 5, W, 1, A.shade('#6a5a42', 0.34));
@@ -291,16 +344,18 @@ export class PortScene {
     };
     tree(slots[1] - 14, groundY + 1); tree(W - 10, groundY + 1);
 
-    this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg);
+    }
+
+    if (!L) { this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg); } else { this.bg = null; }
 
     /* 窗灯（夜晚） */
     this.glow = new Graphics();
     for (const wnd of this.windows) this.glow.rect(wnd.x, wnd.y, wnd.w, wnd.h).fill(0xffd27a);
     this.glow.alpha = 0; this.glow.eventMode = 'none'; this.scene.addChild(this.glow);
 
-    /* 云 */
+    /* 云（手绘天空自带云，不再叠）*/
     this.clouds = [];
-    for (let i = 0; i < 4; i++) { const c = new Sprite(this.cloudTex); c.alpha = 0.55 + rng() * 0.3; c.scale.set(1 + rng() * 1.6, 1 + rng() * 0.6); c.position.set(rng() * W, 6 + rng() * (horizon * 0.48)); c.vx = 1.6 + rng() * 3; c.eventMode = 'none'; this.scene.addChild(c); this.clouds.push(c); }
+    for (let i = 0; i < (L ? 0 : 4); i++) { const c = new Sprite(this.cloudTex); c.alpha = 0.55 + rng() * 0.3; c.scale.set(1 + rng() * 1.6, 1 + rng() * 0.6); c.position.set(rng() * W, 6 + rng() * (horizon * 0.48)); c.vx = 1.6 + rng() * 3; c.eventMode = 'none'; this.scene.addChild(c); this.clouds.push(c); }
     /* 烟 */
     this.smokeLayer = new Container(); this.smokeLayer.eventMode = 'none'; this.scene.addChild(this.smokeLayer); this.smoke = []; this.smokeT = 0;
     /* 海鸥 */
