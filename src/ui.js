@@ -136,6 +136,21 @@ function planVoyage(pid) {
     ${warn}
     <div class="row"><button class="btn primary" data-a="sail" data-pid="${pid}" ${low.length && !S.dest ? 'disabled' : ''}>${S.dest ? '改变航向' : '出航'}</button>${!S.dest && S.supplies < need ? `<button class="btn" data-a="sailSup" data-pid="${pid}" data-q="${Math.min(g.freeSpace(), need + g.dailySupply() * 3 - S.supplies)}">补足补给（${fmt(Math.min(g.freeSpace(), need + g.dailySupply() * 3 - S.supplies) * g.SUPPLY_PRICE)}）</button>` : ''}<button class="btn" data-a="closeModal">取消</button></div>`);
 }
+/**
+ * 交火发生在哪片海：取离船队当前位置最近的港口所属海域。
+ * 原来写的是 port(S.dest || S.pos).zone —— 航行途中打赢的战功会记到**目的港**那片海，
+ * 于是挑一个「对手份额最厚」的目的地就能把战功精准堆到自己想要的海域，
+ * 而不是打哪儿算哪儿。
+ */
+function zoneAtShip() {
+  let best = null, bd = Infinity;
+  for (const p of PORTS) {
+    const dx = geo.projX(p.lon) - S.ship.x, dy = geo.projY(p.lat) - S.ship.y;
+    const d = dx * dx + dy * dy;
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best ? best.zone : port(S.pos).zone;
+}
 function sail(pid) {
   const to = port(pid); closeModal(); flash(); map.setMode('sea'); audio.sfx('sail');
   g.log(S.dest ? `船队改变航向，前往 ${to.name}。` : `从 ${port(S.pos).name} 启航前往 ${to.name}，预计 ${g.voyageDays(pid)} 天。`);
@@ -541,7 +556,7 @@ function renderInvest(p) {
       <button class="btn" data-a="invest" data-amt="5000" ${S.gold < 5000 ? 'disabled' : ''}>投资 5,000（+${est(5000)}）</button>
       <button class="btn" data-a="invest" data-amt="20000" ${S.gold < 20000 ? 'disabled' : ''}>投资 20,000（+${est(20000)}）</button>
     </div></div>
-    <p class="muted" style="font-size:12px">其他扩张手段：在本海域卖出货物（缓慢），或在航行中击败对手商会的船队（一次夺取 6 点）。</p>`;
+    <p class="muted" style="font-size:12px">其他扩张手段：在本海域卖出货物（缓慢），或在航行中击败对手商会的船队（按对方船队规模夺取 1.5~10 点：渔船只值 2 点，成建制的商会舰队最多 10 点）。</p>`;
 }
 function shareBar(zid) {
   const sh = S.share[zid]; const keys = ['player', 'whale', 'redsail', 'goldsand'];
@@ -633,7 +648,7 @@ export const ACTIONS = {
     const r = N.resolveOption(n, d.o);
     if (r.battle) {
       const fleet = N.npcBattleFleet(n);
-      const zid = port(S.dest || S.pos).zone;
+      const zid = zoneAtShip();
       const kind = n.faction === 'pirate' || n.faction === 'free' ? 'pirate' : 'rival';
       closeModal();
       g.startBattle(kind, kind === 'rival' ? n.faction : null, fleet, zid, () => {});

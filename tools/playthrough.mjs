@@ -9,7 +9,10 @@
  *   伤害函数做了一个简化结算——命中与沉没的数学一致，但没有走位，所以战斗结果
  *   会比实战略乐观。航程用 tools/routes.json 里预先算好的真实绕行距离。
  *
- * 用法: node tools/playthrough.mjs [--strategy=trade|quest|contract|mixed] [--years=30] [--seed=1] [--json]
+ * 用法: node tools/playthrough.mjs [--strategy=trade|quest|contract|mixed|force] [--years=30] [--seed=1] [--json]
+ *
+ * force（武力路线）额外说明见下方「武力路线」一节：遭遇供给上限来自浏览器里对真实
+ * npc.js / map.js 的实测，不是拍脑袋的常数。
  */
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
 global.document = { querySelector: () => null };      // quests.flushDialogues 会查「有没有别的弹窗挡着」
@@ -63,7 +66,15 @@ Object.assign(g.hooks, {
   portMarkers: pid => Q.portMarkers(pid),
   onEvent: (t, d) => Q.questEvent(t, d),
   onCargo: () => { if (!g.S.dest) C.recheckHere(); },
-  dayTick: () => C.contractEvent('day'),
+  dayTick: () => {
+    // 月结的收支在 monthTick 里混成一笔，这里按同样的公式先记一次账，
+    // 最后才能回答「金币里有多少是打出来的、多少是海域主导发的」
+    if (g.S.day % 30 === 0) {
+      FS.wages += g.totalCrew() * 4;
+      for (const z of ZONES) if (g.S.share[z.id].player >= 50) FS.domIncome += Math.round(g.S.share[z.id].player * 40);
+    }
+    C.contractEvent('day');
+  },
   onArrive: () => {},
   routeBetween: (a, b) => routeUnits(a, b),
   routeLen: pid => routeUnits(g.S.pos, pid) ?? 0,
@@ -71,7 +82,7 @@ Object.assign(g.hooks, {
 });
 
 /* ---------- 航行 ---------- */
-function sail(pid) {
+function sail(pid, opts = {}) {
   const S = g.S;
   if (pid === S.pos) return true;
   const units = routeUnits(S.pos, pid);
@@ -97,9 +108,13 @@ function sail(pid) {
   Q.checkQuests();
   drainStory();
   if (S.supplies >= g.dailySupply()) S.hunger = 0;
-  maybeEncounter(days + extra);
+  lastSailDays = days + extra;
+  seaDays += days + extra;
+  maybeEncounter(days + extra, opts.pirateOnly);
   return true;
 }
+/** 上一段航程实际在海上的天数（猎杀按航海日摇遭遇要用） */
+let lastSailDays = 0, seaDays = 0;
 
 /**
  * 遇敌：按**在海上的天数**摇，不是按回合摇。
@@ -107,18 +122,147 @@ function sail(pid) {
  * 同样的三十年，长途贸易只摇几十次，短程打法要摇几百次，于是测出来的不是策略差异，
  * 而是回合数差异。港口里停着的时候不会被打劫。
  */
-function maybeEncounter(days) {
+function maybeEncounter(days, pirateOnly = false) {
   const p = 1 - Math.pow(1 - 0.012, Math.max(1, days));     // 海上每天约 1.2%
   if (Math.random() >= p) return;
-  const kind = Math.random() < 0.75 ? 'pirate' : 'rival';
+  // 猎杀航段自己按实测供给摇对手商会船队，这里只留海盗，免得同一批遭遇被算两遍
+  const kind = (!pirateOnly && Math.random() >= 0.75) ? 'rival' : 'pirate';
   const rid = ['whale', 'redsail', 'goldsand'][Math.floor(Math.random() * 3)];
   resolveBattle(kind, kind === 'rival' ? rid : null, g.makeEnemy(kind), g.port(g.S.pos).zone);
+}
+
+/* ==================================================================
+ * 武力路线（--strategy=force）
+ *
+ * 一、遭遇供给上限从哪来
+ *   对手商会船队不是脚本凭空生成的，真实游戏里它们是 npc.js 的 NPC：
+ *   全球同时只有 POOL=46 支船队，阵营按所在海域的份额抽（pickFactionFor），
+ *   接触半径 HAIL_R=26、主动招呼半径 HAIL_R*2.2=57.2，打赢后 npc.remove() 会
+ *   在随机海域补一条新船。所以「一年能打几场」是有硬上限的。
+ *
+ *   这个上限是**实测**出来的，不是估的：在浏览器里跑真实的 map.js + npc.js
+ *   （window.aot.map），让玩家在某片海域的港口之间不停巡航（1× 航速，
+ *   与 map.skipAhead 同样的 dt=0.25），凡是进入 57.2 半径的对手商会船队一律
+ *   击沉并调用 npc.remove()，数 720 个游戏日里能打多少场。结果（场/年）：
+ *     iberia 73.5 · guinea 59 · medsea 30 · nanyang 26.5 · caribbean 17.5
+ *     eastasia 17.5 · brazil 17.5 · levant 14 · northeu 14 · indocean 13
+ *   （同一海域跑两轮的偏差在 ±15% 以内；差别主要来自海域面积——46 支船队是
+ *    按海域数平摊的，小海域密度高。）
+ *   只靠自动触发（半径 26、且 55% 概率才弹遭遇）的话 medsea 只有 20.5 场/年，
+ *   所以「主动搜寻」的收益大概是 1.4~1.5 倍，不是无限。
+ *
+ * 二、份额越高供给越低
+ *   pickFactionFor 按海域份额抽阵营，玩家份额涨上去之后新船更可能是自由商人/海盗。
+ *   实测（把全部海域份额设成同一个值再量 medsea）：0% → 30 场/年，48% → 9，70% → 7.5。
+ *   下面 supplyMult() 就是在这三个点上做线性插值。
+ *
+ * 三、敌人强度用的是 npc.js 的规则，不是 game.js 的 makeEnemy
+ *   makeEnemy('rival') 是按玩家实力缩放的（任务决战 / 随机遇袭走这条），
+ *   但海上招呼来的船队走的是 npcBattleFleet(n)——强度只看 n.strength，
+ *   与玩家多强**完全无关**。这正是武力路线的关键：船队练起来之后，
+ *   猎杀对象不会跟着变强。下面照搬 npc.js 的 makeNpc + npcBattleFleet 数学。
+ * ================================================================== */
+const FS = {
+  loot: 0, shareFromBattle: 0, rivalBattles: 0, rivalWins: 0, pirateBattles: 0, pirateWins: 0,
+  wipes: 0, huntLegs: 0, huntDays: 0, repairGold: 0, buyCost: 0, sellRevenue: 0,
+  domIncome: 0, wages: 0, huntKills: 0, zoneKills: {},
+};
+/** 实测：连续在该海域巡航时，一年能打到的对手商会船队场次（见上方说明） */
+const ZONE_HUNT_RATE = {
+  iberia: 73.5, guinea: 59, medsea: 30, nanyang: 26.5, caribbean: 17.5,
+  eastasia: 17.5, brazil: 17.5, levant: 14, northeu: 14, indocean: 13,
+};
+/** 玩家份额涨上去之后，新生成的 NPC 更少属于对手商会——实测 0%→1.0、48%→0.30、70%→0.25 */
+function supplyMult() {
+  const avg = ZONES.reduce((a, z) => a + g.S.share[z.id].player, 0) / ZONES.length;
+  const pts = [[0, 1], [48, 0.30], [70, 0.25]];
+  if (avg <= 0) return 1;
+  if (avg >= 70) return 0.25;
+  for (let i = 1; i < pts.length; i++) {
+    if (avg <= pts[i][0]) {
+      const [x0, y0] = pts[i - 1], [x1, y1] = pts[i];
+      return y0 + (y1 - y0) * (avg - x0) / (x1 - x0);
+    }
+  }
+  return 0.25;
+}
+/** 泊松抽样：一段航程里撞上几支对手船队 */
+function poisson(lambda) {
+  if (lambda <= 0) return 0;
+  let L = Math.exp(-lambda), k = 0, p = 1;
+  do { k++; p *= Math.random(); } while (p > L && k < 60);
+  return k - 1;
+}
+const NPC_KIND_W = [['merchant', 5], ['escort', 2], ['fisher', 2]];   // npc.js 的 KINDS 权重
+const randI = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
+const rnd = (a, b) => a + Math.random() * (b - a);
+/** 照搬 npc.js makeNpc 里的 ships / strength */
+function makeNpcStats() {
+  const tot = NPC_KIND_W.reduce((a, k) => a + k[1], 0);
+  let x = Math.random() * tot, kind = 'merchant';
+  for (const [k, w] of NPC_KIND_W) { if ((x -= w) <= 0) { kind = k; break; } }
+  const ships = kind === 'fisher' ? 1 : randI(1, kind === 'escort' ? 4 : 3);
+  const per = kind === 'escort' ? 22 : kind === 'fisher' ? 2 : 10;
+  return { kind, ships, strength: Math.round(ships * per * rnd(0.75, 1.3)) };
+}
+/** 照搬 npc.js npcBattleFleet：强度只看 n.strength，和玩家实力无关 */
+function npcBattleFleet(n) {
+  const pool = n.strength > 70 ? ['merchant', 'galleon', 'frigate'] : n.strength > 30 ? ['schooner', 'merchant', 'galleon'] : ['sloop', 'schooner'];
+  const cnt = Math.max(1, Math.min(n.ships, 5));
+  const names = ['旗舰', '护航舰', '武装商船', '运输船', '巡逻舰'];
+  const hpB = Math.max(120, n.strength * 14), cB = Math.max(6, Math.round(n.strength * 0.7)), crB = Math.max(20, n.strength * 2);
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  return Array.from({ length: cnt }, (_, i) => {
+    const t = pool[Math.floor(Math.random() * pool.length)], tt = SHIP_TYPES[t];
+    const hp = clamp(Math.round(hpB / cnt * rnd(0.8, 1.2)), 40, tt.hp);
+    return { type: t, name: names[i % names.length], hp, maxHp: hp,
+      cannons: clamp(Math.round(cB / cnt * rnd(0.8, 1.2)), 2, tt.cannons),
+      crew: clamp(Math.round(crB / cnt * rnd(0.8, 1.2)), 5, tt.crew) };
+  });
+}
+/** 遇到的是哪家商会：按 npc.js pickFactionFor 的规则，与该海域份额成正比 */
+function pickRivalIn(zid) {
+  const sh = g.S.share[zid];
+  const ids = ['whale', 'redsail', 'goldsand'];
+  const tot = ids.reduce((a, r) => a + Math.max(0, sh[r]), 0);
+  if (tot <= 0) return null;
+  let x = Math.random() * tot;
+  for (const r of ids) { if ((x -= Math.max(0, sh[r])) <= 0) return r; }
+  return ids[0];
+}
+/** 在目标海域巡航一段，并按实测供给结算这一段能打到的对手船队 */
+function huntLeg(zid) {
+  const S = g.S;
+  const ports = PORTS.filter(p => p.zone === zid && p.id !== S.pos);
+  if (!ports.length) return false;
+  // 挑本海域里最近的港口来回巡：真人猎杀也是在自家海域兜圈子
+  const dest = ports.sort((a, b) => (routeUnits(S.pos, a.id) ?? 1e9) - (routeUnits(S.pos, b.id) ?? 1e9))[0];
+  const legDays = Math.max(1, Math.ceil((routeUnits(S.pos, dest.id) ?? 0) / g.dayDistance()));
+  topUpSupplies(legDays + 8);
+  if (!sail(dest.id, { pirateOnly: true })) return false;
+  FS.huntLegs++; FS.huntDays += lastSailDays;
+  const lambda = ZONE_HUNT_RATE[zid] / 360 * supplyMult() * lastSailDays;
+  let n = poisson(lambda);
+  for (let i = 0; i < n && !S.won; i++) {
+    const rid = pickRivalIn(zid); if (!rid) break;
+    // 打不动了就不打了：真人不会拿残血船队硬送
+    if (g.S.fleet.reduce((a, s) => a + s.hp, 0) < g.S.fleet.reduce((a, s) => a + g.T(s).hp, 0) * 0.45) break;
+    const stats = makeNpcStats();
+    g.startBattle('rival', rid, npcBattleFleet(stats), zid, () => {});
+    g.B.npc = { faction: rid, kind: stats.kind, zone: zid, id: 'sim' };
+    const r = runBattle();
+    FS.huntKills += r === 'win' ? 1 : 0;
+    FS.zoneKills[zid] = (FS.zoneKills[zid] || 0) + (r === 'win' ? 1 : 0);
+  }
+  return true;
 }
 
 /* ---------- 简化海战结算（伤害数学与 game.js 一致，但没有走位）---------- */
 /** 打完当前这场 B，并且**把战后通知补齐**——ui.js 的 battleDone 做的事这里一件都不能少 */
 function runBattle() {
   const B = g.B; if (!B) return null;
+  const goldBefore = g.S.gold;
+  const shareBefore = B.zone ? g.S.share[B.zone].player : 0;
   let round = 0, result = 'flee';
   // 真人玩家不会打到全灭：明显打不过就撤，撤退判定用游戏里同一个公式。
   // 少了这一步，试玩里的战损会被系统性高估，一局会在「全灭→半资产→再全灭」里打转。
@@ -136,6 +280,17 @@ function runBattle() {
   // 胜利要通知任务与委托：少了这一步，剿匪委托、「击败 N 支船队」与决战
   // 在无头试玩里永远不会推进，于是一半的主线看起来像是「卡住了」。
   const info = { won: g.B.result === 'win', kind: g.B.kind, rivalId: g.B.rivalId, zone: g.B.zone, boss: g.B.boss, npc: g.B.npc };
+  // 统计：战利品金币与「靠打仗夺来的份额」分开记账，最后要回答「金币/份额各自从哪来」
+  FS.loot += Math.max(0, g.S.gold - goldBefore);
+  if (info.zone) FS.shareFromBattle += Math.max(0, g.S.share[info.zone].player - shareBefore);
+  if (info.kind === 'rival') { FS.rivalBattles++; if (info.won) FS.rivalWins++; }
+  else { FS.pirateBattles++; if (info.won) FS.pirateWins++; }
+  if (result === 'lose') FS.wipes++;
+  // ui.js 的 battleDone：打了 NPC 船队要扣对方阵营声望、加海盗好感（胜 −22 / 败 −8）
+  if (info.npc) {
+    g.addRep(info.npc.faction, info.won ? -22 : -8);
+    if (info.npc.faction !== 'pirate') g.addRep('pirate', 4);
+  }
   const cb = g.clearBattle();
   if (info.won) { Q.questEvent('battleWin', info); C.contractEvent('battleWin', info); }
   if (cb) cb(0);
@@ -226,13 +381,17 @@ function bestRun() {
 function upgradeFleet() {
   const S = g.S, p = g.port(S.pos);
   const avail = YARD_SHIPS[p.yard] || [];
-  // 有钱就买能买到的最大船（留一半现金做本钱）
-  const want = ['galleon', 'merchant', 'schooner'].find(t => avail.includes(t) && S.gold > SHIP_TYPES[t].price * 2.2);
+  // 有钱就买能买到的最大船（留一半现金做本钱）；武力路线只要能打的
+  const pref = STRATEGY === 'force' ? ['frigate', 'galleon'] : ['galleon', 'merchant', 'schooner'];
+  const want = pref.find(t => avail.includes(t) && S.gold > SHIP_TYPES[t].price * 2.2);
   if (want && S.fleet.length < 6) { g.buyShip(want); hireAll(); mark(`购入首艘${SHIP_TYPES[want].name}`, { fleet: S.fleet.length }); return true; }
   return false;
 }
 function investIfRich() {
   const S = g.S;
+  // 武力路线要单独量「打仗能拿多少份额」，掺进投资买份额就说不清是谁的功劳了。
+  // --force-invest=1 可以放开，用来看「武力 + 投资」联手比纯贸易快多少。
+  if (STRATEGY === 'force' && arg('force-invest', '0') !== '1') return false;
   if (S.gold > 80000) { g.invest(Math.floor(S.gold * 0.35)); return true; }
   return false;
 }
@@ -356,7 +515,71 @@ function stepQuest() {
   stepTrade();
 }
 
-const STEPS = { trade: stepTrade, contract: stepContract, quest: stepQuest };
+/* ---------- 武力路线的回合 ---------- */
+/**
+ * 猎杀目标海域：默认按实测供给从高到低取 6 片（通关只要 6 片过半）。
+ * 可以用 --zones=a,b,c 换一组（供给最高的六片分散在全球，通勤成本很高，
+ * 用一组地理上挨着的海域能测出「通勤」到底占多少损耗）。
+ */
+const FORCE_ZONES = (arg('zones', '') ? arg('zones', '').split(',').filter(z => ZONES.some(x => x.id === z))
+  : Object.keys(ZONE_HUNT_RATE).sort((a, b) => ZONE_HUNT_RATE[b] - ZONE_HUNT_RATE[a]).slice(0, 6));
+const WAR_SHIPS = ['frigate', 'galleon'];          // 猎杀只看火力与耐久
+const WANT_FLEET = 5;
+function warReady() {
+  const S = g.S;
+  if (S.fleet.length < WANT_FLEET) return false;
+  return S.fleet.every(sh => sh.cannons >= g.T(sh).cannons && sh.crew >= g.T(sh).crew * 0.9);
+}
+function buyWarShip() {
+  const S = g.S, p = g.port(S.pos);
+  const avail = YARD_SHIPS[p.yard] || [];
+  const want = WAR_SHIPS.find(t => avail.includes(t) && S.gold > g.shipCost(t) + SHIP_TYPES[t].cannons * 150 + SHIP_TYPES[t].crew * 25 + 8000);
+  if (!want || S.fleet.length >= 6) return false;
+  g.buyShip(want); armAll(); hireAll();
+  mark(`购入战斗舰「${SHIP_TYPES[want].name}」`, { fleet: S.fleet.length });
+  return true;
+}
+/** 该去哪片海域猎杀：先补掉快到 50 的，再去还没动过的 */
+function forceTargetZone() {
+  const below = FORCE_ZONES.filter(z => g.S.share[z].player < 50);
+  if (!below.length) return null;
+  return below.sort((a, b) => (g.S.share[b].player - g.S.share[a].player) || (ZONE_HUNT_RATE[b] - ZONE_HUNT_RATE[a]))[0];
+}
+function stepForce() {
+  const S = g.S;
+  const hpBefore = S.fleet.reduce((a, sh) => a + sh.hp, 0);
+  repairAll();
+  FS.repairGold += Math.max(0, (S.fleet.reduce((a, sh) => a + sh.hp, 0) - hpBefore)) * 4;
+  hireAll(); armAll();
+  // 1) 先攒战斗船队；钱不够就去做生意
+  if (!warReady()) {
+    if (buyWarShip()) return;
+    if (S.gold < 70000) { stepTrade(); return; }
+  }
+  // 2) 现金见底（付不起薪酬 / 修不起船）也退回去做生意
+  if (S.gold < 12000) { stepTrade(); return; }
+  const zid = forceTargetZone();
+  if (!zid) { stepTrade(); return; }
+  // 3) 不在目标海域就过去，顺路带一船货（真人不会空舱跑）
+  if (g.port(S.pos).zone !== zid) {
+    const gate = PORTS.filter(p => p.zone === zid)
+      .sort((a, b) => (routeUnits(S.pos, a.id) ?? 1e9) - (routeUnits(S.pos, b.id) ?? 1e9))[0];
+    if (!gate) { stepTrade(); return; }
+    const legDays = Math.max(1, Math.ceil((routeUnits(S.pos, gate.id) ?? 0) / g.dayDistance()));
+    topUpSupplies(legDays + 8);
+    fillHoldTowards(gate.id);
+    const carried = Object.keys(g.S.cargo).filter(k => g.sellable(k) > 0);
+    if (!sail(gate.id)) { g.rest(3); return; }
+    for (const k of carried) if (g.sellable(k) > 0) g.sell(k, 'all');
+    return;
+  }
+  // 4) 就地巡航猎杀
+  if (!huntLeg(zid)) { stepTrade(); return; }
+  // 抵港后把顺路货卖掉
+  for (const k of Object.keys(g.S.cargo)) if (g.sellable(k) > 0) g.sell(k, 'all');
+}
+
+const STEPS = { trade: stepTrade, contract: stepContract, quest: stepQuest, force: stepForce };
 function stepMixed() {
   const n = g.S.day % 3;
   (n === 0 ? stepQuest : n === 1 ? stepContract : stepTrade)();
@@ -419,6 +642,19 @@ const out = {
   完成任务: `${Q.QUESTS.filter(q => Q.qStatus(q.id) === 'done').length}/${Q.QUESTS.length}`,
   完成委托: S.ct.done, 违约委托: S.ct.failed,
   海战: `${S.stats.battles} 场，胜 ${S.stats.wins}`,
+  对手商会战: `${FS.rivalBattles} 场，胜 ${FS.rivalWins}（胜率 ${FS.rivalBattles ? Math.round(FS.rivalWins / FS.rivalBattles * 100) : 0}%）`,
+  海盗战: `${FS.pirateBattles} 场，胜 ${FS.pirateWins}`,
+  船队全灭次数: FS.wipes,
+  猎杀航段: `${FS.huntLegs} 段 / ${FS.huntDays} 海上日`,
+  在海天数: seaDays,
+  战斗夺取份额: +FS.shareFromBattle.toFixed(1),
+  各海域猎杀数: Object.entries(FS.zoneKills).map(([z, n]) => `${g.zone(z).name} ${n}`).join(' ') || '无',
+  战利品金币: Math.round(FS.loot),
+  卖货总收入: Math.round(S.stats.turnover || 0),
+  海域主导月收益累计: Math.round(FS.domIncome),
+  薪酬累计支出: Math.round(FS.wages),
+  修船累计支出: Math.round(FS.repairGold),
+  声望: ['whale', 'redsail', 'goldsand', 'pirate'].map(f => `${f} ${g.rep(f)}`).join(' '),
   交易次数: S.stats.trades,
   成交总额: Math.round(S.stats.turnover || 0),
   成交额折份额: Math.round((S.stats.turnover || 0) / g.SHARE_PER_GOLD),

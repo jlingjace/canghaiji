@@ -415,6 +415,23 @@ export function boardAt(a, t, mine, mult = 1) {
   else blog(`${a.name} 强行接舷 ${t.name}，对方船员 −${loss}。`);
   return { loss, captured };
 }
+/**
+ * 击败对手商会船队能夺走多少份额：按对方船队的规模给，不能是定额。
+ *
+ * 原来是固定 6 点。而海上招呼来的船队走 npc.js 的 npcBattleFleet，强度只看 n.strength、
+ * 与玩家多强无关——于是「某商会的渔船」（1 艘船、120 耐久、6 门炮）和一支四艘护航舰队
+ * 一样值 6 点，前者却是满编舰队一轮齐射就结束的零风险白送。
+ * 实测光伊比利亚一片海域每年就有约 16 支对手渔船进入主动招呼半径 = 98 点/年的白送份额，
+ * 够拿下两片海；而 6 点本身就相当于 14.4 万金币的贸易成交额（SHARE_PER_GOLD=24000），
+ * 是这一场战利品（平均约 6000 金币）的 24 倍。
+ * 改成按火力与吨位缩放之后：渔船 2 点、小商船队 6 点、中型以上封顶 10 点——
+ * 白送的那一档掉到三分之一，真正会翻车的硬仗反而比原来更值。
+ */
+export function battleSharePts(fleet) {
+  const guns = fleet.reduce((a, s) => a + (s.cannons || 0), 0);
+  const hull = fleet.reduce((a, s) => a + (s.maxHp || s.hp || 0), 0);
+  return clamp(Math.round((-1 + guns / 3 + hull / 120) * 10) / 10, 1.5, 10);
+}
 export function endBattle(result) {
   B.over = true; B.result = result;
   const sunk = S.fleet.filter(s => s.hp <= 0);
@@ -427,7 +444,12 @@ export function endBattle(result) {
     S.gold += loot;
     blog(`战斗胜利！缴获战利品与赃款 ${fmt(loot)} 金币${cap.length ? `（含 ${cap.length} 艘俘获船只的变卖所得）` : ''}。`, 'good');
     log(`击败${B.kind === 'pirate' ? '海盗' : rival(B.rivalId).name}船队，获得 ${fmt(loot)} 金币。`, 'good');
-    if (B.kind === 'rival') { transferFrom(B.zone, B.rivalId, 'player', 6); blog(`${rival(B.rivalId).name} 在 ${zone(B.zone).name} 的份额被你夺走 6 点。`, 'good'); checkWin(); }
+    if (B.kind === 'rival') {
+      const pts = battleSharePts(B.enemy);
+      transferFrom(B.zone, B.rivalId, 'player', pts);
+      blog(`${rival(B.rivalId).name} 在 ${zone(B.zone).name} 的份额被你夺走 ${pts} 点。`, 'good');
+      checkWin();
+    }
   } else if (result === 'lose') {
     S.cargo = {}; S.supplies = 20; S.gold = Math.max(0, Math.floor(S.gold * 0.5));
     S.fleet = [mkShip('sloop', '余生号', { cannons: 2, crew: 10 })];
