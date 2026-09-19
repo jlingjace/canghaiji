@@ -190,7 +190,7 @@ export class WorldMap {
     // 船是世界里的实体：只按世界比例显示，拉远就该变小
     this.ship.scale.set(SHIP_W * (this.flip ? -1 : 1), SHIP_W);
     this.ship.visible = this.zoom >= LOD_SHIPS * 0.6;
-    if (this.npc) this.npc.setScale(1);
+    if (this.npc) { this.npc.setScale(1); if (this.zoom < LOD_SHIPS) this.npc.render(); }
     this.layoutLabels();
   }
   tierSOf(o) { return o.tierS; }
