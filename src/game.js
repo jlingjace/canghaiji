@@ -12,7 +12,7 @@ export const hooks = {
   render() {}, renderTop() {}, showModal() {}, closeModal() {}, toast() {},
   renderBattle() {}, onArrive() {}, rollEvent() {}, openPortTab() {}, openSeaMap() {},
   onEvent() {}, showDialogue() {}, questPorts() { return new Set(); }, portMarkers() { return {}; },
-  hoverPort() {}, npcDay() {},
+  hoverPort() {}, npcDay() {}, dayTick() {},
   /** 由表现层注入：某港口的真实绕行航程长度（逻辑单位）。默认直线兜底。 */
   routeLen(pid) { const b = port(pid); return Math.hypot(S.ship.x - projX(b.lon), S.ship.y - projY(b.lat)); },
 };
@@ -67,22 +67,66 @@ export function newGame() {
   log('你在白帆港继承了一艘小帆船和 3,000 金币。目标：在六大海域都取得过半的势力份额，称霸沧海。', 'gold');
 }
 
-/* ========= 价格 ========= */
+/* ========= 价格 =========
+   模型三条铁律，缺一条就会出现「原地买了再卖」的刷钱回路：
+   1) 买卖价永远有价差（buyPrice > sellPrice），议价优势只能收窄、不能抹平；
+   2) 成交价沿成交量积分——买入越多均价越高、卖出越多均价越低，交易必须自己承担价格冲击；
+   3) 积分取中点，拆单与整单结果完全一致，杜绝「切成小单规避冲击」。 */
+export const STOCK_LO = -40, STOCK_HI = 60;   // 库存指数区间：价格 0.6× ~ 1.6×
+export const IMPACT = 0.5;                    // 每成交 1 件对库存指数的冲击
+export const SPREAD = 0.06;                   // 基础买卖价差（买 +6%、卖 −6%）
+export const STOCK_DECAY = 0.986;             // 每天回归系数，约 30 天恢复 65%
+
 function baseMult(p, gid) {
   if (p.produce.includes(gid)) return 0.55;
   if (p.demand.includes(gid)) return 1.7;
   return 0.9 + (hash(p.id + gid) % 26) / 100;
 }
-export function price(p, gid) {
-  const m = baseMult(p, gid) * S.drift[p.id][gid] * (1 + S.stock[p.id][gid] / 100);
-  return Math.max(1, Math.round(G[gid].base * m));
-}
+const stockMult = st => 1 + clamp(st, STOCK_LO, STOCK_HI) / 100;
+/** 不含买卖价差的中间价（未取整，供积分用） */
+function corePrice(p, gid) { return G[gid].base * baseMult(p, gid) * S.drift[p.id][gid]; }
+/** 挂牌价：成交 1 件时的中间价 */
+export function price(p, gid) { return Math.max(1, Math.round(corePrice(p, gid) * stockMult(S.stock[p.id][gid]))); }
 export const dominated = zid => S.share[zid].player >= 50;
-export function buyPrice(p, gid) {
-  const mult = Math.max(0.82, (dominated(p.zone) ? 0.92 : 1) * (S.captain === 'lin' ? 0.95 : 1) * repBuyMod(p));
-  return Math.max(1, Math.round(price(p, gid) * mult));
+/** 议价优势：0=没有优势，最多只能收窄 60% 的价差，永远合不拢 */
+export function tradeEdge(p) {
+  let e = 0;
+  if (dominated(p.zone)) e += 0.25;
+  if (S.captain === 'lin') e += 0.20;
+  e += repEdge(p);
+  return clamp(e, -0.35, 0.6);
 }
-export function sellPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * 0.9 * repSellMod(p))); }
+const sideMult = (p, side) => side === 'buy' ? 1 + SPREAD * (1 - tradeEdge(p)) : 1 - SPREAD * (1 - tradeEdge(p));
+export function buyPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * sideMult(p, 'buy'))); }
+export function sellPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * sideMult(p, 'sell'))); }
+/** 把已知的挂牌价折成卖出价（用于「最佳去处」这类只有记忆价的估算） */
+export const sellFromSpot = (p, spot) => Math.max(1, Math.round(spot * sideMult(p, 'sell')));
+
+/**
+ * 成交报价：把库存冲击沿成交量积分（线性价格取中点即为精确积分）。
+ * 返回 { qty, unit(均价), total, from, to(成交后的库存指数) }。
+ */
+export function quote(p, gid, qty, side) {
+  qty = Math.max(0, Math.floor(qty));
+  const s0 = clamp(S.stock[p.id][gid], STOCK_LO, STOCK_HI);
+  if (!qty) return { qty: 0, unit: side === 'buy' ? buyPrice(p, gid) : sellPrice(p, gid), total: 0, from: s0, to: s0 };
+  const s1 = clamp(s0 + (side === 'buy' ? IMPACT : -IMPACT) * qty, STOCK_LO, STOCK_HI);
+  const unit = Math.max(1, Math.round(corePrice(p, gid) * stockMult((s0 + s1) / 2) * sideMult(p, side)));
+  return { qty, unit, total: unit * qty, from: s0, to: s1 };
+}
+/** 在预算与舱位内最多能买几件（均价随量上涨，只能二分） */
+export function maxAffordable(p, gid, gold, space) {
+  let lo = 0, hi = Math.max(0, Math.floor(space));
+  if (hi && quote(p, gid, hi, 'buy').total <= gold) return hi;
+  while (lo < hi) { const m = Math.ceil((lo + hi) / 2); if (quote(p, gid, m, 'buy').total <= gold) lo = m; else hi = m - 1; }
+  return lo;
+}
+/** 运货委托代货主保管的货物件数：不计入可卖出量 */
+export function consigned(gid) {
+  const list = (S.ct && S.ct.active) || [];
+  return list.reduce((t, c) => t + (c.kind === 'deliver' && c.good === gid ? Math.max(0, c.qty) : 0), 0);
+}
+export const sellable = gid => Math.max(0, (S.cargo[gid] || 0) - consigned(gid));
 export const SUPPLY_PRICE = 3;
 export function remember(pid) { const p = port(pid); const prices = {}; for (const g of GOODS) prices[g.id] = price(p, g.id); S.mem[pid] = { day: S.day, prices }; }
 
@@ -108,19 +152,37 @@ export function checkWin() {
 }
 
 /* ========= 时间 ========= */
+export const HUNGER_GRACE = 3;                // 断粮后的半口粮宽限天数
+/** 每天把各港库存指数拉回 0，让价格冲击随时间恢复（原本挤在月结，会被卡月底钻空子） */
+export function decayStock(days) {
+  if (days <= 0) return;
+  const k = Math.pow(STOCK_DECAY, days);
+  for (const p of PORTS) { const st = S.stock[p.id]; if (!st) continue;
+    for (const gd of GOODS) { const v = st[gd.id]; if (v) st[gd.id] = Math.abs(v) < 0.05 ? 0 : Math.round(v * k * 1000) / 1000; } }
+}
 export function passDays(n, inPort = false) {
-  let starved = false;
+  let starved = 0, halfRation = 0;
   for (let i = 0; i < n; i++) {
     S.day++;
     if (!inPort) {
       const use = dailySupply();
-      if (S.supplies >= use) S.supplies -= use;
-      else { S.supplies = 0; starved = true; for (const sh of S.fleet) sh.crew = Math.max(1, sh.crew - Math.ceil(sh.crew * 0.05)); }
+      if (S.supplies >= use) { S.supplies -= use; S.hunger = 0; }
+      else {
+        S.supplies = 0; S.hunger = (S.hunger || 0) + 1;
+        if (S.hunger <= HUNGER_GRACE) halfRation++;
+        else {
+          const rate = Math.min(0.08, 0.02 + (S.hunger - HUNGER_GRACE) * 0.01);
+          for (const sh of S.fleet) sh.crew = Math.max(1, sh.crew - Math.ceil(sh.crew * rate));
+          starved++;
+        }
+      }
     }
-    hooks.npcDay(1);
+    hooks.npcDay(1); hooks.dayTick();
     if (S.day % 30 === 0) monthTick();
   }
-  if (starved) log('补给耗尽，船员因饥渴不断减员！', 'bad');
+  decayStock(n);
+  if (starved) log(`断粮第 ${S.hunger} 天，船员开始病倒减员！尽快靠港补给，或在海上向渔船、商船买粮。`, 'bad');
+  else if (halfRation) log(`补给见底，全队改吃半口粮（航速下降）。还能撑 ${Math.max(0, HUNGER_GRACE - (S.hunger || 0))} 天不减员。`, 'bad');
 }
 export function monthTick() {
   const wages = totalCrew() * 4; S.gold -= wages;
@@ -128,7 +190,7 @@ export function monthTick() {
   for (const z of ZONES) if (dominated(z.id)) income += Math.round(S.share[z.id].player * 40);
   S.gold += income;
   for (const r of RIVALS) { const zid = Math.random() < 0.45 ? r.home : pick(ZONES).id; transferShare(zid, r.id, rand(0.8, 2.6)); }
-  for (const p of PORTS) for (const g of GOODS) { S.drift[p.id][g.id] = clamp(S.drift[p.id][g.id] * rand(0.92, 1.08), 0.75, 1.3); S.stock[p.id][g.id] *= 0.65; }
+  for (const p of PORTS) for (const g of GOODS) S.drift[p.id][g.id] = clamp(S.drift[p.id][g.id] * rand(0.92, 1.08), 0.75, 1.3);
   ensureRep();
   for (const k of REP_KEYS) { const v = S.rep[k] || 0; S.rep[k] = Math.abs(v) < 1 ? 0 : Math.round(v - Math.sign(v) * Math.max(0.5, Math.abs(v) * 0.03)); }
   log(`月结：支付船员薪酬 ${fmt(wages)}${income ? `，海域主导收益 +${fmt(income)}` : ''}。`, income ? 'good' : '');
@@ -141,10 +203,8 @@ export function ensureRep() { if (!S.rep) S.rep = { whale: 0, redsail: 0, goldsa
 export function rep(f) { ensureRep(); return S.rep[f] ?? 0; }
 export function addRep(f, v) { ensureRep(); if (!(f in S.rep)) return; S.rep[f] = clamp(Math.round(S.rep[f] + v), -100, 100); }
 export function repLabel(v) { return v >= 60 ? '盟友' : v >= 25 ? '友好' : v >= -10 ? '中立' : v >= -45 ? '冷淡' : v >= -75 ? '敌视' : '死敌'; }
-/** 声望对进货价的影响（±6%） */
-export function repBuyMod(p) { const f = zoneLeader(p.zone); if (f === 'player' || !S.rep || !(f in S.rep)) return 1; return 1 - clamp(S.rep[f], -60, 60) / 1000; }
-/** 声望对卖出价的影响（±5%） */
-export function repSellMod(p) { const f = zoneLeader(p.zone); if (f === 'player' || !S.rep || !(f in S.rep)) return 1; return 1 + clamp(S.rep[f], -60, 60) / 1200; }
+/** 声望在本港带来的议价优势占比（并入 tradeEdge，只能收窄价差） */
+export function repEdge(p) { const f = zoneLeader(p.zone); if (f === 'player' || !S.rep || !(f in S.rep)) return 0; return clamp(S.rep[f], -60, 60) / 60 * 0.15; }
 
 /* ========= 天气 ========= */
 export const WEATHER_ICON = { clear: '☀', rain: '🌧', storm: '⛈' };
@@ -164,6 +224,7 @@ export function fleetSpeed() {
   let s = Math.min(...S.fleet.map(sh => T(sh).speed));
   if (S.captain === 'shen') s += 1;
   if (S.fleet.some(sh => sh.crew < T(sh).crew * 0.3)) s -= 1;
+  if (S.hunger > 0) s -= 1;                                  // 半口粮：全队掉速
   return Math.max(2, s);
 }
 export const dailySupply = () => Math.max(1, Math.ceil(totalCrew() / 20));
@@ -266,24 +327,39 @@ export function endBattle(result) {
 
 /* ========= 交易 / 港口操作 ========= */
 export function buy(gid, q) {
-  const p = port(S.pos); const pr = buyPrice(p, gid);
-  if (q === 'max') q = Math.min(Math.floor(Math.max(0, S.gold) / pr), freeSpace());
-  q = Math.min(+q, freeSpace(), Math.floor(Math.max(0, S.gold) / pr));
-  if (q <= 0) return hooks.toast(S.gold < pr ? '金币不足' : '货舱已满');
-  S.gold -= q * pr; S.cargo[gid] = (S.cargo[gid] || 0) + q; S.stats.trades++;
-  S.stock[p.id][gid] = clamp(S.stock[p.id][gid] + q * 0.5, -40, 60);
-  S.avgCost = S.avgCost || {}; S.avgCost[gid] = pr;
+  const p = port(S.pos), space = freeSpace();
+  const cap = maxAffordable(p, gid, Math.max(0, S.gold), space);
+  q = q === 'max' ? cap : Math.min(Math.max(0, Math.floor(+q)), cap);
+  if (q <= 0) return hooks.toast(space <= 0 ? '货舱已满' : '金币不足');
+  const spot = buyPrice(p, gid), qt = quote(p, gid, q, 'buy');
+  const had = S.cargo[gid] || 0, prevAvg = (S.avgCost && S.avgCost[gid]) || qt.unit;
+  S.gold -= qt.total; S.cargo[gid] = had + q; S.stats.trades++;
+  S.stock[p.id][gid] = qt.to;
+  S.avgCost = S.avgCost || {}; S.avgCost[gid] = Math.round((had * prevAvg + qt.total) / (had + q));
   hooks.onEvent('buy', { gid, qty: q });
   remember(p.id); hooks.render();
+  hooks.toast(`买入 ${G[gid].name} ×${q} · 均价 ${qt.unit}${qt.unit > spot ? `（挂牌 ${spot}，吃掉了 ${Math.round((qt.unit / spot - 1) * 100)}% 的价格冲击）` : ''} · 共 ${fmt(qt.total)}`);
 }
 export function sell(gid, q) {
-  const p = port(S.pos); const have = S.cargo[gid] || 0; if (!have) return;
-  if (q === 'all') q = have; q = Math.min(+q, have); const pr = sellPrice(p, gid);
-  S.gold += q * pr; S.cargo[gid] -= q; if (S.cargo[gid] <= 0) delete S.cargo[gid]; S.stats.trades++;
-  S.stock[p.id][gid] = clamp(S.stock[p.id][gid] - q * 0.5, -40, 60);
-  transferShare(p.zone, 'player', q * pr / 6000); checkWin();
+  const p = port(S.pos), free = sellable(gid);
+  if (!(S.cargo[gid] || 0)) return;
+  if (free <= 0) return hooks.toast('这批货是委托货主托运的，抵港交付前不能卖');
+  q = q === 'all' ? free : Math.min(Math.max(0, Math.floor(+q)), free);
+  if (q <= 0) return;
+  const spot = sellPrice(p, gid), qt = quote(p, gid, q, 'sell');
+  S.gold += qt.total; S.cargo[gid] -= q; if (S.cargo[gid] <= 0) delete S.cargo[gid]; S.stats.trades++;
+  S.stock[p.id][gid] = qt.to;
+  transferShare(p.zone, 'player', qt.total / 6000); checkWin();
   hooks.onEvent('sell', { gid, qty: q, pid: p.id });
   remember(p.id); hooks.render();
+  hooks.toast(`卖出 ${G[gid].name} ×${q} · 均价 ${qt.unit}${qt.unit < spot ? `（挂牌 ${spot}，砸下去 ${Math.round((1 - qt.unit / spot) * 100)}%）` : ''} · 共 ${fmt(qt.total)}`);
+}
+/** 海上向渔船 / 商船买补给：比港口贵，但能救命 */
+export function buySuppliesAt(unit, q) {
+  q = Math.min(Math.max(0, Math.floor(+q)), freeSpace(), Math.floor(Math.max(0, S.gold) / unit));
+  if (q <= 0) return 0;
+  S.gold -= q * unit; S.supplies += q; S.hunger = 0; hooks.render();
+  return q;
 }
 export function buySupplies(q) {
   if (q === 'max') q = Math.min(freeSpace(), Math.floor(Math.max(0, S.gold) / SUPPLY_PRICE));
@@ -358,6 +434,8 @@ export function migrate() {
   S.captain = S.captain || 'lin';
   S.weather = S.weather || { type: 'clear', days: 0 };
   S.ct = S.ct || { active: [], done: 0, failed: 0 };
+  S.avgCost = S.avgCost || {};
+  if (typeof S.hunger !== 'number') S.hunger = 0;
   ensureRep();
   for (const k of REP_KEYS) if (typeof S.rep[k] !== 'number') S.rep[k] = 0;
   delete S.escortUntil;

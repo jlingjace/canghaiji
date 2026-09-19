@@ -105,15 +105,32 @@ function planVoyage(pid) {
   const km = geo.greatCircleKm(geo.unprojLon(S.ship.x), geo.unprojLat(S.ship.y), to.lon, to.lat);
   const need = days * g.dailySupply();
   const low = g.crewShortage();
-  let warn = '';
-  if (low.length && !S.dest) warn += `<p class="bad">${low.map(s => s.name).join('、')} 船员不足（至少需要满员 20%），无法出航。请先到酒馆招募。</p>`;
-  else if (S.supplies < need) warn += `<p class="warn">补给不足：需要约 ${need}，现有 ${S.supplies}。途中断粮会导致船员减员。</p>`;
+  const checks = [];
+  const add = (lv, t, d) => checks.push({ lv, t, d });
+  if (low.length) add(S.dest ? 'warn' : 'bad', '船员', `${low.map(s => s.name).join('、')} 不足满员 20%，${S.dest ? '航速受损' : '无法出航，请先到酒馆招募'}`);
+  else if (S.fleet.some(sh => sh.crew < T(sh).crew * 0.5)) add('warn', '船员', '部分船只半数以下人手，战斗与接舷吃亏');
+  else add('ok', '船员', `共 ${g.totalCrew()} 人，各船人手充足`);
+  if (S.supplies >= need) add('ok', '补给', `${S.supplies} / 需要约 ${need}（日耗 ${g.dailySupply()}）`);
+  else if (S.supplies >= need * 0.7) add('warn', '补给', `${S.supplies} / 需要约 ${need}，勉强够，建议补到 ${need + g.dailySupply() * 3}`);
+  else add('bad', '补给', `只有 ${S.supplies}，需要约 ${need}。撑到第 ${Math.max(1, Math.floor(S.supplies / g.dailySupply()))} 天断粮，之后 ${g.HUNGER_GRACE} 天半口粮，再往后每天减员`);
+  const hurt = S.fleet.filter(sh => sh.hp < T(sh).hp * 0.5);
+  if (hurt.length) add('warn', '船体', `${hurt.map(x => x.name).join('、')} 耐久不足一半，遇上海盗很危险`);
+  else add('ok', '船体', '各船耐久良好');
+  const due = C.activeContracts().filter(c => C.daysLeft(c) < days + (c.to === pid ? 0 : 6));
+  if (due.length) add('warn', '委托', due.map(c => `${c.label.slice(0, 18)}… 剩 ${C.daysLeft(c)} 天`).join('；'));
+  const qp = hooks.questPorts();
+  if (qp.has && qp.has(pid)) add('ok', '任务', '这里有任务或委托目标');
+  if (S.weather && S.weather.type === 'storm') add('warn', '天候', `风暴中（还有 ${S.weather.days} 天），航速只有 72%`);
+  const space = g.freeSpace();
+  add(space > 0 ? 'ok' : 'warn', '货舱', `空舱 ${space} / ${g.capacity()}${space === 0 ? '，到港前无法再装货' : ''}`);
+  const ICON = { ok: '<span class="good">✓</span>', warn: '<span class="warn">⚠</span>', bad: '<span class="bad">✖</span>' };
+  const warn = `<div class="card" style="margin-top:6px"><b>出航前检查</b>${checks.map(c => `<div class="row" style="margin-top:4px;align-items:flex-start"><span style="width:18px">${ICON[c.lv]}</span><span style="width:40px" class="muted">${c.t}</span><span style="flex:1;font-size:12px" class="${c.lv === 'bad' ? 'bad' : c.lv === 'warn' ? 'warn' : ''}">${c.d}</span></div>`).join('')}</div>`;
   showModal(`<h2>${S.dest ? '改变航向 → ' : '前往 '}${to.name}</h2>
     <p>${S.dest ? '当前位置' : port(S.pos).name} → ${to.name}（${z.name}） · 直线 <b>${fmt(km)}</b> km · 实际航程约 <b>${days}</b> 天 · 航速 ${g.fleetSpeed()}</p>
     <p class="muted" style="font-size:12px">${['', '小港', '中港', '大港'][to.tier]} · 造船厂 ${'▮'.repeat(to.yard)}${'▯'.repeat(3 - to.yard)}（${to.yard >= 3 ? '可造全部船型' : to.yard === 2 ? '可造大商船' : '仅小型船'}）</p>
     <p>预计消耗补给 ${need}（现有 ${S.supplies}）· 特产：${to.produce.map(x => G[x].name).join('、')} · 紧缺：${to.demand.map(x => G[x].name).join('、')}</p>
     ${warn}
-    <div class="row"><button class="btn primary" data-a="sail" data-pid="${pid}" ${low.length && !S.dest ? 'disabled' : ''}>${S.dest ? '改变航向' : '出航'}</button><button class="btn" data-a="closeModal">取消</button></div>`);
+    <div class="row"><button class="btn primary" data-a="sail" data-pid="${pid}" ${low.length && !S.dest ? 'disabled' : ''}>${S.dest ? '改变航向' : '出航'}</button>${!S.dest && S.supplies < need ? `<button class="btn" data-a="sailSup" data-pid="${pid}" data-q="${Math.min(g.freeSpace(), need + g.dailySupply() * 3 - S.supplies)}">补足补给（${fmt(Math.min(g.freeSpace(), need + g.dailySupply() * 3 - S.supplies) * g.SUPPLY_PRICE)}）</button>` : ''}<button class="btn" data-a="closeModal">取消</button></div>`);
 }
 function sail(pid) {
   const to = port(pid); closeModal(); flash(); map.setMode('sea'); audio.sfx('sail');
@@ -233,6 +250,20 @@ function encTrade(t) {
     <button class="btn" data-a="encBack">返回</button></div>`);
   enc.trade = t;
 }
+function encSupply(sp) {
+  const n = enc.n;
+  const maxQ = Math.min(sp.qty, g.freeSpace(), Math.floor(Math.max(0, S.gold) / sp.unit));
+  const needDays = S.dest ? g.voyageLeft() : 6;
+  const want = Math.min(maxQ, Math.max(0, needDays * g.dailySupply() + 6 - S.supplies));
+  showModal(`<h2>海上补给 · ${N.npcTitle(n)}</h2>
+    <p>对方愿意匀出 <b>${sp.qty}</b> 单位补给，开价 <b class="gold">${sp.unit}</b> 金币/单位（港口 ${g.SUPPLY_PRICE}）。</p>
+    <p class="muted" style="font-size:12px">你的补给 ${S.supplies} · 日耗 ${g.dailySupply()} · 还剩约 ${needDays} 天航程 · 空舱 ${g.freeSpace()} · 最多可买 ${maxQ}</p>
+    <div class="row">${[10, 30, 60].map(q => `<button class="btn" data-a="encSup" data-q="${q}" ${maxQ < q ? 'disabled' : ''}>买 ${q}</button>`).join('')}
+    ${want > 0 ? `<button class="btn primary" data-a="encSup" data-q="${want}">买够到港（${want}）</button>` : ''}
+    <button class="btn" data-a="encSup" data-q="${maxQ}" ${maxQ <= 0 ? 'disabled' : ''}>买满 ${maxQ}</button>
+    <button class="btn" data-a="encBack">返回</button></div>`);
+  enc.supply = sp;
+}
 function encFinish() {
   const e = enc; enc = null; closeModal(); render();
   if (e && e.after) e.after();
@@ -250,7 +281,7 @@ function portDirectory() {
     let per = 0;
     if (dirGood && known && S.mem[p.id].prices[dirGood] != null) {
       best = S.mem[p.id].prices[dirGood];
-      per = (Math.round(best * 0.9) - g.buyPrice(port(S.pos), dirGood)) / days;
+      per = (g.sellFromSpot(p, best) - g.buyPrice(port(S.pos), dirGood)) / days;
     }
     return { p, known, d, days, best, per };
   });
@@ -298,7 +329,7 @@ function bestMarket(gid, fromPid = S.pos) {
     if (pid === fromPid) continue;
     const pr = S.mem[pid].prices[gid]; if (pr == null) continue;
     const p = port(pid);
-    const sell = Math.round(pr * 0.9);
+    const sell = g.sellFromSpot(p, pr);
     const days = Math.max(1, Math.ceil(Math.hypot(geo.projX(p.lon) - geo.projX(here.lon), geo.projY(p.lat) - geo.projY(here.lat)) / g.dayDistance()));
     const profit = sell - cost;
     const perDay = profit / days;
@@ -319,10 +350,10 @@ function renderBoard(p) {
       <span class="spacer"></span><span class="gold">${fmt(c.reward)} 金币</span></div>
       <div class="row" style="margin-top:2px"><span class="muted" style="font-size:11px">${cl.name}：“${c.flavor}”</span></div>
       <div class="row" style="margin-top:6px"><button class="btn sm ${taken ? '' : 'primary'}" data-a="ctAccept" data-c="${c.id}" ${taken ? 'disabled' : ''}>${taken ? '已接下' : '接受委托'}</button>
-      <span class="muted" style="font-size:11px">${c.days} 天内完成${c.kind === 'deliver' ? ' · 货物由委托方装船' : ''}</span></div></div>`;
+      <span class="muted" style="font-size:11px">${c.days} 天内完成${c.kind === 'deliver' ? `，需要 ${c.qty} 格空舱 · 货物由委托方装船，途中不可变卖` : ''}${c.kind === 'procure' ? '，货要自己从产地运来' : ''}</span></div></div>`;
   };
   const mine = act.length ? act.map(c => `<div class="card"><div class="row"><span class="badge ${C.daysLeft(c) <= 3 ? 'high' : 'low'}">剩 ${C.daysLeft(c)} 天</span><b>${c.label}</b><span class="spacer"></span><span class="gold">${fmt(c.reward)}</span></div>
-      <div class="muted" style="font-size:11px">进度 ${C.progressText(c)}${c.to !== p.id ? ` · 交付地 ${port(c.to).name}` : ''}</div></div>`).join('') : '<p class="muted" style="font-size:12px">还没有接下的委托。</p>';
+      <div class="row" style="margin-top:4px"><span class="muted" style="font-size:11px">进度 ${C.progressText(c)}${c.to !== p.id ? ` · 交付地 ${port(c.to).name}` : ''}</span><span class="spacer"></span><button class="btn sm danger" data-a="ctQuit" data-c="${c.id}">放弃</button></div></div>`).join('') : '<p class="muted" style="font-size:12px">还没有接下的委托。</p>';
   return `${npcCard('cen', `本港的委托每 ${C.PERIOD} 天换一批，先到先得。`)}
     <h3>本港委托</h3>${list.map(card).join('')}
     <h3>进行中（${act.length}/5）</h3>${mine}`;
@@ -394,7 +425,10 @@ function renderAtSea() {
   const to = port(S.dest); const v = S.voyage;
   return `<h2>航行中</h2>${npcCard('ahai', pick(['风向不错，保持航向！', '瞭望手说前方海面平静。', '船长，补给还够撑几天，别绕远路。', '再点一个港口就能改航向，随你吩咐。']))}
     <div class="card"><b>目的地</b> ${to.name}（${zone(to.zone).name}）<br><span class="muted">已航行 ${v.days} 天 · 约剩 ${g.voyageLeft()} 天 · 特产：${to.produce.map(x => G[x].name).join('、')} · 紧缺：${to.demand.map(x => G[x].name).join('、')}</span></div>
-    <div class="card"><b>镜头与速度</b><div class="row" style="margin-top:6px"><button class="btn" data-a="recenter">⌖ 回到船队</button><button class="btn" data-a="speed">${map.speedMul === 1 ? '▶ 快进 3×' : '▶ 恢复 1×'}</button></div><p class="muted" style="font-size:12px">拖动海图可以查看远处；点击其他港口可改变航向。港口操作要等抵港后进行。</p></div>`;
+    <div class="card"><b>补给</b> <span class="${S.supplies < g.dailySupply() * 3 ? 'bad' : 'muted'}">现有 ${S.supplies} · 日耗 ${g.dailySupply()} · 还够 ${Math.floor(S.supplies / g.dailySupply())} 天</span>
+      ${S.hunger > 0 ? `<p class="bad" style="font-size:12px;margin:4px 0 0">断粮第 ${S.hunger} 天，全队半口粮、航速 −1。${S.hunger <= g.HUNGER_GRACE ? `还有 ${g.HUNGER_GRACE - S.hunger + 1} 天开始减员。` : '正在减员！'}按 🚩 招呼渔船或商船可以在海上买粮。</p>` : ''}</div>
+    <div class="card"><b>镜头与速度</b><div class="row" style="margin-top:6px"><button class="btn" data-a="recenter">⌖ 回到船队</button><button class="btn" data-a="speed">▶ ${map.speedMul}× 航速</button><button class="btn primary" data-a="skip">⏩ 跳到下一事件</button></div>
+      <p class="muted" style="font-size:12px">「跳到下一事件」会一路推进到触发航海事件、遇上船队或抵港为止，天数、补给与天气照常结算。拖动海图可查看远处；点击其他港口可改变航向。</p></div>`;
 }
 function renderPort() {
   const p = port(S.pos), z = zone(p.zone); const leader = g.zoneLeader(z.id);
@@ -412,18 +446,27 @@ function renderPort() {
 }
 function renderMarket(p) {
   const rows = GOODS.map(gd => {
-    const bp = g.buyPrice(p, gd.id), sp = g.sellPrice(p, gd.id), have = S.cargo[gd.id] || 0; const ratio = g.price(p, gd.id) / gd.base;
+    const bp = g.buyPrice(p, gd.id), sp = g.sellPrice(p, gd.id); const ratio = g.price(p, gd.id) / gd.base;
+    const have = S.cargo[gd.id] || 0, free = g.sellable(gd.id), held = have - free;
     const tag = p.produce.includes(gd.id) ? '<span class="badge low">特产</span>' : p.demand.includes(gd.id) ? '<span class="badge high">紧缺</span>' : ratio < 0.85 ? '<span class="badge low">偏低</span>' : ratio > 1.25 ? '<span class="badge high">偏高</span>' : '';
     const bm = bestMarket(gd.id);
-    return `<tr><td>${gd.name} ${tag}</td><td class="r">${bp} / <span class="muted">${sp}</span></td><td class="r">${have || '<span class="muted">-</span>'}</td>
+    // 因果提示：自己的成交把本地价格推到了哪里，以及买满一船的实际均价
+    const st = S.stock[p.id][gd.id] || 0;
+    const cap = g.maxAffordable(p, gd.id, Math.max(0, S.gold), g.freeSpace());
+    const q = g.quote(p, gd.id, cap, 'buy');
+    let note = '';
+    if (Math.abs(st) >= 1) note = `<span class="${st > 0 ? 'bad' : 'good'}">行情${st > 0 ? '↑' : '↓'}${Math.abs(Math.round(st))}%</span> <span class="muted">近期成交所致，每天回落 1.4%</span>`;
+    else if (cap > 0 && q.unit > bp) note = `<span class="muted">买满 ${cap} 件均价 ${q.unit}（+${Math.round((q.unit / bp - 1) * 100)}%）</span>`;
+    const holdTxt = have ? `${have}${held ? `<br><span class="muted" style="font-size:10px">${held} 托运</span>` : ''}` : '<span class="muted">-</span>';
+    return `<tr><td>${gd.name} ${tag}</td><td class="r">${bp} / <span class="muted">${sp}</span>${note ? `<br><span style="font-size:10px">${note}</span>` : ''}</td><td class="r">${holdTxt}</td>
       <td style="font-size:11px">${bm ? `<span class="good">${bm.p.name}</span> +${bm.profit}<br><span class="muted">${bm.days} 天 · ${bm.perDay.toFixed(1)}/天</span>` : '<span class="muted">—</span>'}</td>
       <td><span class="row nowrap"><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="1">买1</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="10">买10</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="max">买满</button>
-      <button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="10" ${have ? '' : 'disabled'}>卖10</button><button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="all" ${have ? '' : 'disabled'}>全卖</button></span></td></tr>`;
+      <button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="10" ${free ? '' : 'disabled'}>卖10</button><button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="all" ${free ? '' : 'disabled'}>全卖</button></span></td></tr>`;
   }).join('');
   return `<div class="card"><div class="row"><b>补给</b> <span class="muted">${g.SUPPLY_PRICE} 金币/单位 · 现有 ${S.supplies} · 日耗 ${g.dailySupply()} · 空舱 ${g.freeSpace()}</span></div>
     <div class="row" style="margin-top:6px"><button class="btn sm" data-a="buySup" data-q="10">+10</button><button class="btn sm" data-a="buySup" data-q="50">+50</button><button class="btn sm" data-a="buySup" data-q="max">买满</button><button class="btn sm" data-a="sellSup" data-q="10">卖10</button></div></div>
     <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>最佳去处（每件）</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="font-size:12px">「最佳去处」依据你已到访或打听到的行情估算（含 10% 卖出折价与航程天数）。大量买卖会冲击当地价格，每月逐步恢复。</p>`;
+    <p class="muted" style="font-size:12px">买卖之间固定有 ${Math.round(g.SPREAD * (1 - g.tradeEdge(p)) * 200)}% 的价差，原地买了再卖必然亏本；成交量越大，均价越吃亏——<b>低买高卖要靠跑距离，不是靠来回刷</b>。价格冲击每天回落约 1.4%，停泊等待也能让行情恢复。<br>「最佳去处」依据你已到访或打听到的行情估算，已计入价差与航程天数。</p>`;
 }
 function renderYard(p) {
   const forSale = YARD_SHIPS[p.yard].map(t => { const s = SHIP_TYPES[t];
@@ -489,7 +532,7 @@ function renderShare() {
     return `<div style="margin:4px 0"><span style="font-size:12px">${N.FACTION_LABEL[f]} <span class="muted">${N.repLabel(v)}（${v > 0 ? '+' : ''}${v}）</span></span>
       <div class="bar"><i style="width:${w}%;background:${v >= 25 ? 'var(--good)' : v <= -25 ? 'var(--bad)' : 'var(--gold2)'}"></i></div></div>`; }).join('');
   return `<h2>势力版图</h2><p class="muted" style="font-size:12px">已主导 <b class="gold">${won}/${VICTORY_ZONES}</b>（全图 ${ZONES.length} 个海域） · 每月主导收益 ${fmt(income)} 金币</p>${zones}
-    <h3>声望</h3><div class="card">${reps}<p class="muted" style="font-size:11px;margin-top:6px">本港进货价因声望 ${((g.repBuyMod(port(S.pos)) - 1) * 100).toFixed(1)}%，卖出价 ${((g.repSellMod(port(S.pos)) - 1) * 100).toFixed(1)}%。<br>
+    <h3>声望</h3><div class="card">${reps}<p class="muted" style="font-size:11px;margin-top:6px">本港买卖价差 ±${(g.SPREAD * (1 - g.tradeEdge(port(S.pos))) * 100).toFixed(1)}%（声望贡献 ${(g.repEdge(port(S.pos)) * 100).toFixed(0)}% 的收窄幅度）。<br>
       声望不等于份额：份额是地盘（决定胜负），声望是态度（决定价格与海上待遇）。武力夺份额必然压低声望。关系每月会向 0 回归一点。</p></div>${'' /* */}
     <h3>对手商会</h3>${RIVALS.map(r => { const rep = CHARS[RIVAL_REP[r.id]]; return `<div class="npc">${portrait(rep, 48)}<div><b style="color:${r.color}">${r.name}</b> <span class="muted">${rep.name} · ${rep.title}</span><div class="muted" style="font-size:12px">大本营 ${zone(r.home).name}，每月会在各海域扩张，尤其巩固大本营。</div></div></div>`; }).join('')}`;
 }
@@ -516,6 +559,7 @@ export const ACTIONS = {
   ptab: d => { S.ptab = d.ptab; render(); },
   buy: d => g.buy(d.g, d.q), sell: d => g.sell(d.g, d.q),
   buySup: d => g.buySupplies(d.q), sellSup: d => g.sellSupplies(d.q),
+  sailSup: d => { g.buySupplies(d.q); planVoyage(d.pid); },
   buyShip: d => g.buyShip(d.t), sellShip: d => g.sellShip(+d.i), repair: d => g.repair(+d.i), repairAll: () => g.repairAll(),
   addCannon: d => g.addCannon(+d.i, d.q), removeCannon: d => g.removeCannon(+d.i, d.q),
   hire: d => g.hire(+d.i, d.q), dismiss: d => g.dismiss(+d.i, d.q), invest: d => g.invest(d.amt), rest: d => g.rest(+d.d),
@@ -558,6 +602,7 @@ export const ACTIONS = {
       n.cooldown = 600; enc = null; hooks.renderBattle(); return;
     }
     if (r.trade) { encTrade(r.trade); return; }
+    if (r.supply) { encSupply(r.supply); return; }
     encResult(r.text, false);
   },
   encBuy: d => {
@@ -565,10 +610,30 @@ export const ACTIONS = {
     const msg = N.doNpcBuy(enc.n, enc.trade, Math.min(+d.q, enc.trade.qty));
     renderTop(); encResult(msg, true);
   },
+  encSup: d => {
+    if (!enc || !enc.supply) return;
+    const msg = N.doNpcSupply(enc.n, enc.supply.unit, Math.min(+d.q, enc.supply.qty));
+    renderTop(); encResult(msg, true);
+  },
   encBack: () => { if (enc) showEncounter(enc.n, enc.mode); },
   encDone: () => { if (enc) enc.n.cooldown = Math.max(enc.n.cooldown, 240); encFinish(); },
   backPort: () => { map.setMode('port'); renderMapCtl(); },
-  speed: () => { map.speedMul = map.speedMul === 1 ? 3 : 1; document.getElementById('speedbtn').textContent = `▶ ${map.speedMul}×`; if (S.tab === 'port' && S.dest) renderPanel(); },
+  speed: () => { map.speedMul = map.speedMul === 1 ? 3 : map.speedMul === 3 ? 8 : 1; const b = document.getElementById('speedbtn'); if (b) b.textContent = `▶ ${map.speedMul}×`; if (S.tab === 'port' && S.dest) renderPanel(); },
+  skip: () => {
+    if (!S.dest) return toast('船队没有在航行');
+    const r = map.skipAhead();
+    render();
+    if (r === 'arrived') return;
+    if (r === 'event') return;
+    toast(r === 'noVoyage' ? '船队没有在航行' : '已推进到航程尽头');
+  },
+  ctQuit: d => {
+    const c = C.activeContracts().find(x => x.id === d.c); if (!c) return;
+    showModal(`<h2>放弃委托？</h2><p>「${c.label}」</p>
+      <p class="warn">立刻按违约处理：${c.kind === 'deliver' ? '货主收回托运货物，短少部分照价赔偿，并' : ''}赔付约 ${fmt(Math.round(c.reward * 0.4))} 金币违约金。</p>
+      <div class="row"><button class="btn danger" data-a="ctQuitYes" data-c="${c.id}">确认放弃</button><button class="btn" data-a="closeModal">再想想</button></div>`);
+  },
+  ctQuitYes: d => { const err = C.abandon(d.c); if (err) toast(err); closeModal(); render(); },
   closeModal: () => { closeModal(); render(); }, help: () => help(),
   save: () => g.save(false), load: () => { resetGoldTween(); g.load(false); },
   newGame: () => showModal(`<h2>开始新游戏？</h2><p>当前进度会被覆盖。</p><div class="row"><button class="btn danger" data-a="confirmNew">开始新游戏</button><button class="btn" data-a="closeModal">取消</button></div>`),
@@ -595,6 +660,7 @@ export function initUI(worldMap) {
   map = worldMap;
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
     routeLen: pid => map.routeLen(pid), npcDay: d => map.npc.day(d),
+    dayTick: () => C.contractEvent('day'),
     onEvent: Q.questEvent, showDialogue, hoverPort: showPortTip,
     questPorts: () => { const s = Q.questPorts(); for (const c of C.activeContracts()) s.add(c.to); return s; },
     portMarkers: pid => { const m = Q.portMarkers(pid); const fresh = C.boardFor(pid).some(c => !C.isTaken(c.id)); if (fresh && !m.office) m.office = '!'; return m; },
@@ -607,6 +673,7 @@ export function initUI(worldMap) {
     if (d > 60) return toast(`${N.npcTitle(n)}还在 ${Math.round(d / 12)}° 外，靠近些再打招呼`);
     showEncounter(n, 'meet');
   };
+  map.busy = () => !!(B || enc || document.querySelector('.modal-bg'));
   map.npc.onEncounter = (n, mode) => { if (B || enc || document.querySelector('.modal-bg')) return; if (S.escorted && n.kind === 'raider') return; showEncounter(n, mode); };
   map.npc.reset();
   const boot = () => { audio.init(); document.removeEventListener('pointerdown', boot); document.removeEventListener('keydown', boot); };

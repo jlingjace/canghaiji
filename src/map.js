@@ -231,6 +231,24 @@ export class WorldMap {
     }
     if (v.leg >= v.path.length) this.arrive();
   }
+  /**
+   * 快速推进航程，直到触发航海事件 / 遭遇 / 抵港。
+   * 复用 move() 与 npc.tick()，所以天数、补给、天气、NPC 世界全都照常结算。
+   */
+  skipAhead(maxDays = 400) {
+    if (!S.voyage || !S.dest) return 'noVoyage';
+    const startDay = S.day, hadEvent = S.voyage.eventFired;
+    let guard = 0;
+    while (S.dest && guard++ < 60000) {
+      this.move(0.25);
+      if (!S.dest) return 'arrived';
+      this.npc.tick(0.25, false);
+      if (this.busy && this.busy()) return 'event';
+      if (S.voyage && S.voyage.eventFired && !hadEvent) return 'event';
+      if (S.day - startDay >= maxDays) return 'timeout';
+    }
+    return 'timeout';
+  }
   arrive() {
     const pid = S.dest; const p = port(pid);
     S.ship = { x: projX(p.lon), y: projY(p.lat) }; S.dest = null; S.voyage = null; S.pos = pid;

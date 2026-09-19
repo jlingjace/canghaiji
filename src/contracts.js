@@ -1,7 +1,7 @@
 /* 港口委托板：每个港口程序化生成的短期委托（运货 / 采购 / 剿匪 / 快航），
    让 30+ 个港口每一个都有去的理由。委托按「港口 + 时段」用种子生成，只有接下的才写进存档。 */
 import { PORTS, GOODS, G, ZONES } from './data.js';
-import { S, port, zone, price, log, freeSpace, capacity, transferShare, checkWin } from './game.js';
+import { S, port, zone, price, log, freeSpace, transferShare, checkWin } from './game.js';
 import { seeded, hash, clamp, fmt } from './util.js';
 import { projX, projY, greatCircleKm } from './geo.js';
 
@@ -59,12 +59,14 @@ export function boardFor(pid, period = periodOf(S.day)) {
           label: `把 ${G[gd.id].name} ×${qty} 运到 ${dest.name}（${due} 天内）` });
       }
     } else if (kind === 'procure') {
-      const gd = GOODS[Math.floor(rng() * GOODS.length)];
+      // 只收本港「紧缺」的货：本地行情 ≥1.7 倍基准价，而报酬按基准价的 1.25~1.55 倍计，
+      // 所以在本港现买现交必然亏本，只有从产地运来才划算。
+      const gd = G[p.demand[Math.floor(rng() * p.demand.length)]];
       const qty = Math.round(clamp(8 + rng() * 30, 6, 45));
       const due = 12 + Math.floor(rng() * 20);
       out.push({ id, kind, from: pid, to: pid, good: gd.id, qty, days: due, client, flavor,
-        reward: Math.round(qty * price(p, gd.id) * (1.25 + rng() * 0.35)),
-        label: `为 ${p.name} 采购 ${G[gd.id].name} ×${qty}（${due} 天内）` });
+        reward: Math.round(qty * gd.base * (1.25 + rng() * 0.30)),
+        label: `为 ${p.name} 采购 ${gd.name} ×${qty}（${due} 天内）` });
     } else {
       const n = 1 + Math.floor(rng() * 2);
       const due = 20 + Math.floor(rng() * 20);
@@ -83,20 +85,26 @@ export const isTaken = id => activeContracts().some(c => c.id === id);
 export function accept(c) {
   ensureContracts();
   if (S.ct.active.length >= 5) return '同时最多接 5 个委托。';
-  if (c.kind === 'deliver' && (S.cargo[c.good] || 0) < c.qty && freeSpace() < c.qty) return '货舱空间不足，装不下这批货。';
+  if (c.kind === 'deliver' && freeSpace() < c.qty) return `货舱空间不足：这批托运货需要 ${c.qty} 格，当前空舱 ${freeSpace()} 格。`;
   const rec = { ...c, dueDay: S.day + c.days, prog: 0 };
   if (c.kind === 'deliver') {
-    const have = S.cargo[c.good] || 0;
-    const give = Math.min(c.qty, freeSpace() + have);
-    S.cargo[c.good] = have + Math.max(0, c.qty - have);   // 委托方把货装上船
+    S.cargo[c.good] = (S.cargo[c.good] || 0) + c.qty;     // 委托方把货装上船（托运货，不能变卖）
     rec.loaded = true;
   }
   S.ct.active.push(rec);
   log(`接下委托：${c.label}，报酬 ${fmt(c.reward)} 金币。`, 'gold');
   return null;
 }
+/** 主动放弃委托：立刻按违约处理 */
+export function abandon(id) {
+  ensureContracts();
+  const c = S.ct.active.find(x => x.id === id);
+  if (!c) return '没有这个委托。';
+  finish(c, false, true);
+  return null;
+}
 
-function finish(c, ok) {
+function finish(c, ok, quit = false) {
   ensureContracts();
   S.ct.active = S.ct.active.filter(x => x.id !== c.id);
   if (ok) {
@@ -106,7 +114,15 @@ function finish(c, ok) {
     log(`完成委托「${c.label}」，获得 ${fmt(c.reward)} 金币，${zone(zid).name}份额 +0.6。`, 'gold');
   } else {
     S.ct.failed++;
-    log(`委托「${c.label}」已过期作废。`, 'bad');
+    // 托运货是货主的：违约时收回实物，短少的部分照价赔偿，另付违约金
+    let fine = Math.round(c.reward * 0.4);
+    if (c.kind === 'deliver' && c.loaded) {
+      const take = Math.min(S.cargo[c.good] || 0, c.qty);
+      if (take > 0) { S.cargo[c.good] -= take; if (S.cargo[c.good] <= 0) delete S.cargo[c.good]; }
+      fine += Math.round((c.qty - take) * G[c.good].base * 1.2);
+    }
+    S.gold -= fine;
+    log(`${quit ? '放弃' : '未能按期完成'}委托「${c.label}」：赔付 ${fmt(fine)} 金币违约金。`, 'bad');
   }
   return ok;
 }
@@ -116,7 +132,7 @@ export function contractEvent(type, d = {}) {
   ensureContracts();
   const done = [];
   for (const c of [...S.ct.active]) {
-    if (S.day > c.dueDay) { finish(c, false); continue; }
+    if (S.day > c.dueDay) { finish(c, false); continue; }   // 过期：每天都会检查一次，不必等到靠港
     if (type === 'arrive') {
       if ((c.kind === 'deliver') && d.pid === c.to && (S.cargo[c.good] || 0) >= c.qty) {
         S.cargo[c.good] -= c.qty; if (S.cargo[c.good] <= 0) delete S.cargo[c.good];

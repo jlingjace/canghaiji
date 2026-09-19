@@ -2,7 +2,7 @@
    以及遭遇时的多选项互动与声望系统。NPC 本身不写入存档，读档时重新生成。 */
 import { Container, Sprite, Graphics, Text, Rectangle } from 'pixi.js';
 import { PORTS, ZONES, GOODS, G, FACTION_COLOR, FACTION_NAME, RIVALS, SHIP_TYPES } from './data.js';
-import { S, port, zone, zoneLeader, price, fleetValue, totalCrew, rep, addRep, dayDistance } from './game.js';
+import { S, port, zone, zoneLeader, price, fleetValue, totalCrew, rep, addRep, dayDistance, buySuppliesAt } from './game.js';
 import { projX, projY } from './geo.js';
 import { findPath, snapToWater, NAV } from './nav.js';
 import { clamp, pick, rand, randInt, hash } from './util.js';
@@ -221,6 +221,10 @@ export function npcDesc(n) {
   const strTxt = n.strength > 60 ? '火力可观' : n.strength > 25 ? '武装一般' : '几乎没有武装';
   return `${n.ships} 艘船，${strTxt}，${cargoTxt}。`;
 }
+/** 海上补给单价：港口 3 金币，渔船 6、商船 9，越缺越值 */
+export const supplyUnit = n => n.kind === 'fisher' ? 6 : 9;
+/** 对方船上能匀出来的补给量 */
+export const supplyStock = n => Math.max(10, Math.round(n.ships * (n.kind === 'fisher' ? 40 : 25)));
 const myPower = () => fleetValue() / 900 + totalCrew() / 20;
 /** 实力对比：>1.4 压制，0.7~1.4 相当，<0.7 劣势 */
 export const powerRatio = n => myPower() / Math.max(6, n.strength);
@@ -244,6 +248,11 @@ export function encounterOptions(n, mode) {
   out.push({ id: 'greet', kind: 'talk', label: '打招呼', hint: '交换航海见闻，略微改善关系' });
   if (n.cargo && n.kind !== 'raider') out.push({ id: 'buy', kind: 'trade', label: '海上交易', hint: '买下他们的货，通常比港口便宜' });
   else if (n.cargo && n.kind === 'raider' && r > -20) out.push({ id: 'buy', kind: 'trade', label: '买下赃物', hint: '来路不明，但便宜得多；会提高海盗好感、降低商会好感' });
+  if (n.kind !== 'raider') {
+    const u = supplyUnit(n);
+    out.push({ id: 'supply', kind: 'trade', label: `买补给（${u} 金币/单位）`,
+      hint: S.gold < u ? '金币不足' : n.kind === 'fisher' ? '渔船的鱼干最便宜，断粮时的救命稻草' : '比港口贵，但海上有得买就不错了', disabled: S.gold < u });
+  }
   out.push({ id: 'info', kind: 'info', label: '打听行情（80 金币）', hint: S.gold < 80 ? '金币不足 80' : '问出附近港口一件高价商品', disabled: S.gold < 80 });
   if (n.kind === 'escort' && n.faction !== 'pirate') out.push({ id: 'hire', kind: 'hire', label: '雇佣护航（600 金币）', hint: S.gold < 600 ? '金币不足 600' : '本次航程内海盗不会主动袭击', disabled: S.gold < 600 });
   if (mine && n.faction !== 'free' && n.kind !== 'raider') out.push({ id: 'toll', kind: 'demand', label: '索要通行费', hint: '你主导本海域；对方可能照付，也可能翻脸' });
@@ -294,6 +303,13 @@ export function resolveOption(n, id, qty = 0) {
     case 'buy': {
       const t = npcTrade(n); if (!t) { R.text = '对方没有可出售的货物。'; return R; }
       R.trade = t; R.close = false; return R;
+    }
+    case 'supply': {
+      if (n.supplySold == null) n.supplySold = 0;
+      const left = Math.max(0, supplyStock(n) - n.supplySold);
+      if (left <= 0) { R.text = '“船上的干粮都匀给你了，真没有了。”'; return R; }
+      R.supply = { unit: supplyUnit(n), qty: left };
+      R.close = false; return R;
     }
     case 'info': {
       if (S.gold < 80) { R.text = '金币不足。'; return R; }
@@ -367,6 +383,15 @@ export function resolveOption(n, id, qty = 0) {
       return R;
     }
   }
+}
+
+/** 海上成交：买补给 */
+export function doNpcSupply(n, unit, qty) {
+  const got = buySuppliesAt(unit, qty);
+  if (!got) return '金币不足，或者货舱已经装不下了。';
+  n.supplySold = (n.supplySold || 0) + got;
+  addRep(n.faction, 1);
+  return `对方用吊索递过来 ${got} 单位补给，收了 ${got * unit} 金币。「一路顺风。」`;
 }
 
 /** 海上成交：买入 NPC 的货 */
