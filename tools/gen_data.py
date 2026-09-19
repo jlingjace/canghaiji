@@ -20,6 +20,37 @@ pnew_name = {p['id']: p['name'] for p in ports}
 victory = design['victory']['zonesRequired']
 rival_home = {r['rival']: r['zone'] for r in design['rivalHomes']}
 
+# ---------- 贸易闭合：保证剧情里的「向某海域卖某货」有买家 ----------
+def close_trade_routes():
+    story_pre = json.load(open(os.path.join(ROOT,'tools','story.orig.json')))
+    zmap_l = {m['oldId']: m['newId'] for m in design['zoneMap']}
+    by_zone = {}
+    for p in ports: by_zone.setdefault(p['zone'], []).append(p)
+    fixed = []
+    for q in story_pre['main'] + story_pre['side']:
+        for o in q['objectives']:
+            if o['kind'] != 'sell' or not o.get('zone') or not o.get('good'): continue
+            nz = zmap_l.get(o['zone'], o['zone']); gd = o['good']
+            zps = by_zone.get(nz, [])
+            if any(gd in p['demand'] for p in zps): continue
+            cand = [p for p in zps if gd not in p['produce']]
+            if not cand: continue
+            cand.sort(key=lambda p: -p['tier'])
+            cand[0]['demand'] = (cand[0]['demand'] + [gd])[:4]
+            fixed.append(f"{cand[0]['id']} += demand {gd}（为 {q['id']}）")
+    # 每种商品至少有一个产地与一个紧缺地
+    for g in goods:
+        if not any(g['id'] in p['produce'] for p in ports):
+            c = sorted(ports, key=lambda p: -p['tier'])[0]; c['produce'] = (c['produce'] + [g['id']])[:4]
+            fixed.append(f"{c['id']} += produce {g['id']}（商品无产地）")
+        if not any(g['id'] in p['demand'] for p in ports):
+            c = [p for p in sorted(ports, key=lambda p: -p['tier']) if g['id'] not in p['produce']][0]
+            c['demand'] = (c['demand'] + [g['id']])[:4]
+            fixed.append(f"{c['id']} += demand {g['id']}（商品无销路）")
+    return fixed
+
+trade_fixes = close_trade_routes()
+
 # 起始港：旧 baifan 映射到的港口
 start = pmap.get('baifan') or ports[0]['id']
 
@@ -79,6 +110,7 @@ chars = old[old.index('/* ========= 人物（全部原创角色） ========= */'
 w(chars)
 open(os.path.join(ROOT,'src','data.js'),'w').write(out.getvalue())
 print('data.js ports=%d zones=%d goods=%d start=%s victory=%d' % (len(ports),len(zones),len(goods),start,victory))
+for f in trade_fixes: print('  trade-fix:', f)
 
 # ---------- 迁移 story.js ----------
 sp = os.path.join(ROOT,'src','story.js')

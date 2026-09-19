@@ -64,7 +64,7 @@ export const VICTORY_ZONES = 6;
 
 /** 港口：lat/lon 为真实经纬度；tier 规模 1–3；yard 造船厂等级 1–3 */
 export const PORTS = [
-  { id: "lisboa", name: "里斯本", nameEn: "Lisboa", lat: 38.71, lon: -9.14, zone: "iberia", tier: 3, yard: 3, produce: ["wine", "oliveoil", "saltfish"], demand: ["spice", "porcelain", "silk"] },  // 特茹河口的远洋起点，印度航线的香料在此卸货，王家船厂就设在河岸。
+  { id: "lisboa", name: "里斯本", nameEn: "Lisboa", lat: 38.71, lon: -9.14, zone: "iberia", tier: 3, yard: 3, produce: ["wine", "oliveoil", "saltfish"], demand: ["spice", "porcelain", "silk", "coffee"] },  // 特茹河口的远洋起点，印度航线的香料在此卸货，王家船厂就设在河岸。
   { id: "sevilla", name: "塞维利亚", nameEn: "Sevilla", lat: 37.39, lon: -5.99, zone: "iberia", tier: 3, yard: 2, produce: ["oliveoil", "iron"], demand: ["silver", "cocoa", "tobacco"] },  // 瓜达尔基维尔河上的内河大港，美洲船队的登记与卸银地，也是橄榄油与铁料的集散地。
   { id: "funchal", name: "丰沙尔", nameEn: "Funchal", lat: 32.65, lon: -16.91, zone: "iberia", tier: 1, yard: 1, produce: ["sugar", "wine"], demand: ["grain", "cloth", "iron"] },  // 马德拉岛上的甘蔗与葡萄园小港，南下船队的第一个补给站，粮食与铁器全靠外运。
   { id: "venezia", name: "威尼斯", nameEn: "Venezia", lat: 45.44, lon: 12.34, zone: "medsea", tier: 3, yard: 3, produce: ["glass", "cloth"], demand: ["spice", "silk", "dye"] },  // 潟湖上的老牌共和国商港，国营船厂规模惊人，玻璃与织物外销，香料丝绸靠黎凡特转口买入。
@@ -97,7 +97,7 @@ export const PORTS = [
   { id: "quanzhou", name: "泉州", nameEn: "Quanzhou", lat: 24.87, lon: 118.68, zone: "eastasia", tier: 2, yard: 2, produce: ["silk", "tea"], demand: ["spice", "herb", "cotton"] },  // 闽南的老海港与造船地，生丝与茶叶下海，南洋香料与药材上岸。
   { id: "macau", name: "澳门", nameEn: "Macau", lat: 22.19, lon: 113.54, zone: "eastasia", tier: 2, yard: 1, produce: ["porcelain", "tea"], demand: ["spice", "ivory", "wine"] },  // 珠江口外的半岛转口点，往返长崎的丝银船都在这里过冬修补。
   { id: "nagasaki", name: "长崎", nameEn: "Nagasaki", lat: 32.74, lon: 129.87, zone: "eastasia", tier: 2, yard: 2, produce: ["silver", "iron"], demand: ["silk", "porcelain", "herb"] },  // 九州西岸的深水湾，银山的白银与铜铁器由此出港，换回生丝、瓷器与舶来药材。
-  { id: "havana", name: "哈瓦那", nameEn: "Havana", lat: 23.13, lon: -82.38, zone: "caribbean", tier: 3, yard: 3, produce: ["tobacco", "leather"], demand: ["wine", "cloth", "oliveoil"] },  // 加勒比最好的避风湾与船厂，返航船队在此集结补给，本地出烟叶与牛皮。
+  { id: "havana", name: "哈瓦那", nameEn: "Havana", lat: 23.13, lon: -82.38, zone: "caribbean", tier: 3, yard: 3, produce: ["tobacco", "leather"], demand: ["wine", "cloth", "oliveoil", "herb"] },  // 加勒比最好的避风湾与船厂，返航船队在此集结补给，本地出烟叶与牛皮。
   { id: "cartagena", name: "卡塔赫纳", nameEn: "Cartagena de Indias", lat: 10.42, lon: -75.55, zone: "caribbean", tier: 3, yard: 2, produce: ["gem", "cocoa"], demand: ["cloth", "wine", "iron"] },  // 大陆海岸的要塞大港，内陆矿区的祖母绿与可可豆在此装船。
   { id: "portobelo", name: "波托韦洛", nameEn: "Portobelo", lat: 9.55, lon: -79.65, zone: "caribbean", tier: 2, yard: 1, produce: ["silver", "cocoa"], demand: ["cloth", "wine", "grain"] },  // 地峡北岸的集市港，南方运来的白银在这里堆成山，平时却连口粮都要外运。
   { id: "veracruz", name: "韦拉克鲁斯", nameEn: "Veracruz", lat: 19.19, lon: -96.14, zone: "caribbean", tier: 2, yard: 2, produce: ["silver", "dye"], demand: ["wine", "oliveoil", "iron"] },  // 墨西哥湾的登陆口，高原来的银锭与胭脂虫红在此上船，酒与橄榄油则整船卸下。
