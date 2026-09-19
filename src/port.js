@@ -1,6 +1,7 @@
 /* 港口场景：运行时生成的像素街景 + 建筑热区 + 路人 / 海鸥 / 旗子 / 烟 / 浪花动画（全部原创） */
 import { Assets, Container, Sprite, Graphics, Text } from 'pixi.js';
-import { S, hooks, port, zone } from './game.js';
+import { S, hooks, port, zone, zoneLeader } from './game.js';
+import { FACTION_COLOR } from './data.js';
 import { canvasTexture, pixelsToCanvas } from './pixelart.js';
 import { seeded, hash, clamp } from './util.js';
 import * as A from './art.js';
@@ -23,6 +24,23 @@ const STYLES = {
   brazil: { wall: '#f0dcc0', wall2: '#d2bd9e', beam: '#7a5a3a', roof: '#b06a3a', roof2: '#8a4e2a', roofStyle: 'flat', ground: '#c4a880', ground2: '#a08a64', hill: '#2f8a4a', hill2: '#236a38', sky: ['#3fa8e0', '#ffe0b0'] },
 };
 const styleOf = p => STYLES[zone(p.zone)?.style] || STYLES.iberian;
+
+/* ---- 码头道具（像素画，两条路径共用）---- */
+const pCrate = (px, cx, cy, cw) => {
+  px(cx + 1, cy + cw, cw + 1, 1, 'rgba(10,16,26,0.42)');
+  px(cx, cy, cw, cw, '#7a5630'); px(cx, cy, cw, 1, '#a07a46'); px(cx + cw - 2, cy, 2, cw, '#563a1e');
+  px(cx + 1, cy + Math.round(cw / 2), cw - 3, 1, '#4b331b');
+};
+const pBarrel = (px, cx, cy, bw, bh) => {
+  px(cx + 1, cy + bh, bw + 1, 1, 'rgba(10,16,26,0.42)');
+  for (let i = 0; i < bw; i++) { const t = Math.abs(i - (bw - 1) / 2) / (bw / 2); px(cx + i, cy + Math.round(t * 1.4), 1, bh - Math.round(t * 2.4), A.shade('#8a6038', 0.22 - t * 0.7)); }
+  px(cx, cy + 2, bw, 1, '#3f2a16'); px(cx, cy + bh - 3, bw, 1, '#3f2a16');
+};
+const pRope = (px, cx, cy) => { for (let r = 5; r > 1; r--) px(cx - r, cy - r / 2, r * 2, 1, r % 2 ? '#a89060' : '#826c44'); px(cx - 5, cy + 2, 10, 1, 'rgba(10,16,26,0.35)'); };
+const pSack = (px, cx, cy, w2) => {
+  px(cx + 1, cy + w2, w2 + 1, 1, 'rgba(10,16,26,0.40)');
+  for (let i = 0; i < w2; i++) { const t = Math.abs(i - (w2 - 1) / 2) / (w2 / 2); px(cx + i, cy + Math.round(t * 2), 1, w2 - Math.round(t * 2), A.shade('#c8b183', 0.18 - t * 0.55)); }
+};
 const BUILDINGS = [
   { key: 'market', name: '货栈', ptab: 'market' },
   { key: 'tavern', name: '酒馆', ptab: 'tavern' },
@@ -86,7 +104,80 @@ export class PortScene {
     } catch (e) { /* 加载失败就继续用程序化背景 */ }
   }
 
-  /** 按「覆盖画布 + 底部对齐」摆放背景板，并把美术对齐线换算成场景坐标 */
+  /**
+   * 码头道具层：同一海域的三到六个港共用一张手绘底图，靠这一层区分彼此。
+   *
+   * 教训：一开始画了一堆小道具（吊架、手推车、系缆桩），在手绘底图上完全读不出来——
+   * 高精度的画面里，几个十来像素的静物只会像脏点。现在只留**少而大**的东西：
+   * 一两堆明显的货、一面旗、几盏夜里会亮的灯，其余差异交给会动的元素（路人、停泊的船）。
+   */
+  drawQuayProps(p, W, H, groundY, seaY) {
+    const cv = document.createElement('canvas'); cv.width = W; cv.height = H;
+    const x = cv.getContext('2d');
+    const px = (a, b, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a), Math.round(b), Math.max(0, Math.round(w)), Math.max(0, Math.round(h))); };
+    const rng = seeded(hash(p.id) + 91);
+    const band = Math.max(10, seaY - groundY);
+    const yOf = t => Math.round(groundY + band * t);
+    const dev = Math.min(3, (S.dev && S.dev[p.id]) || 0);
+    const lamps = [];
+
+    // 货堆：少而大。规模与发展度决定堆数，位置贴着画面两侧的空石板
+    const piles = Math.min(4, 1 + (p.tier >= 3 ? 2 : p.tier === 2 ? 1 : 0) + Math.round(dev / 2));
+    for (let i = 0; i < piles; i++) {
+      const left = i % 2 === 0;
+      const cx = Math.round(left ? W * (0.03 + rng() * 0.10) : W * (0.84 + rng() * 0.10));
+      const base = yOf(0.62 + rng() * 0.22);
+      const big = Math.round(band * 0.42), small = Math.round(band * 0.30);
+      if (rng() < 0.55) {
+        pCrate(px, cx, base - big, big);
+        pCrate(px, cx + Math.round(big * 0.25), base - big - small + 1, small);
+        if (rng() < 0.5) pBarrel(px, cx + big + 2, base - small - 2, Math.round(small * 0.8), small + 2);
+      } else {
+        const bw = Math.round(band * 0.30), bh = Math.round(band * 0.44);
+        pBarrel(px, cx, base - bh, bw, bh);
+        pBarrel(px, cx + bw + 1, base - bh + 2, bw, bh - 2);
+        pSack(px, cx + Math.round(bw * 0.4), base - bh - small + 2, small);
+      }
+    }
+    // 旗：只有小半截高过街面，旗面做大一点才看得见颜色
+    const leader = zoneLeader(p.zone);
+    const fx = Math.round(W * (0.17 + rng() * 0.05));
+    const fh = Math.round(band * 1.05), ftop = groundY - Math.round(fh * 0.5);
+    px(fx, ftop, 2, fh, '#2d3038'); px(fx, ftop, 1, fh, '#4a505c'); px(fx - 1, ftop - 2, 4, 2, '#6a7280');
+    const fc = FACTION_COLOR[leader] || '#cfdcea';
+    const fw = Math.max(9, Math.round(band * 0.34));
+    for (let i = 0; i < fw; i++) px(fx + 2 + i, ftop + 1 + (i % 4 === 3 ? 1 : 0), 1, Math.max(3, Math.round(band * 0.22) - Math.floor(i / 5)), i % 5 === 4 ? A.shade(fc, -0.28) : fc);
+    px(fx, groundY - 1, 3, 2, 'rgba(10,16,26,0.35)');
+
+    // 提灯：夜里由 glow 层点亮，大港多一盏
+    for (let i = 0, n = p.tier >= 3 ? 3 : 2; i < n; i++) {
+      const lx = Math.round(W * (0.30 + i * 0.20 + rng() * 0.04)), ly = yOf(0.20);
+      const lh = Math.round(band * 0.5);
+      px(lx, ly, 2, lh, '#2d3038'); px(lx, ly, 1, lh, '#454a54');
+      px(lx - 2, ly - 5, 6, 5, '#23262c'); px(lx - 1, ly - 4, 4, 3, '#ffd98a');
+      px(lx - 1, ly + lh, 4, 1, 'rgba(10,16,26,0.35)');
+      lamps.push({ x: lx - 1, y: ly - 4, w: 4, h: 3 });
+    }
+    return { canvas: cv, lamps };
+  }
+
+  /** 停泊的小船：比静物好使，会晃，一眼就看出这个港热不热闹 */
+  addMooredBoats(p, W, seaY, rng) {
+    this.moored = [];
+    const n = p.tier >= 3 ? 3 : p.tier === 2 ? 2 : 1;
+    for (let i = 0; i < n; i++) {
+      const sp = new Sprite(this.shipTex.E[0]);
+      sp.anchor.set(0.5, 0.75); sp.eventMode = 'none';
+      const left = i % 2 === 0;
+      sp.scale.set((left ? 1 : -1) * (0.55 + rng() * 0.2), 0.55 + rng() * 0.2);
+      sp.position.set(Math.round(left ? W * (0.08 + rng() * 0.12) : W * (0.80 + rng() * 0.12)), seaY + 6 + Math.round(rng() * 8));
+      sp.tint = [0xd8d0c4, 0xcfd8dc, 0xdcd2bc][i % 3];
+      sp.phase = rng() * 6;
+      this.scene.addChild(sp); this.moored.push(sp);
+    }
+  }
+
+  /** 按「覆盖画布 + 底部对齐」摆放背景板，并把美术对齐线换算成场景坐标 */  /** 按「覆盖画布 + 底部对齐」摆放背景板，并把美术对齐线换算成场景坐标 */
   placeArt(art, tex, vw, vh, K) {
     this.artLayer.removeChildren().forEach(c => c.destroy());
     const iw = tex.width, ih = tex.height;
@@ -244,7 +335,7 @@ export class PortScene {
     }  // ← 程序化背景到此为止
 
     /* ===== 主体建筑 ===== */
-    this.hot = []; this.windows = []; this.flagPos = null; this.smokePos = null;
+    this.hot = []; this.windows = []; this.flagPos = null; this.smokePos = null; this.moored = null; this.props = null;
     const slots = [0.04, 0.285, 0.53, 0.775].map(f => Math.round(W * f));
     if (L) {
       // 建筑已经画在背景里了，这里只按清单给出的横向范围摆热区
@@ -304,17 +395,9 @@ export class PortScene {
     x.globalAlpha = 1;
 
     /* --- 前景道具：更暗更大，把画面框住 --- */
-    const crate = (cx, cy, cw) => {
-      px(cx + 1, cy + cw, cw + 1, 1, 'rgba(10,16,26,0.42)');
-      px(cx, cy, cw, cw, '#7a5630'); px(cx, cy, cw, 1, '#a07a46'); px(cx + cw - 2, cy, 2, cw, '#563a1e');
-      px(cx + 1, cy + Math.round(cw / 2), cw - 3, 1, '#4b331b');
-    };
-    const barrel = (cx, cy, bw, bh) => {
-      px(cx + 1, cy + bh, bw + 1, 1, 'rgba(10,16,26,0.42)');
-      for (let i = 0; i < bw; i++) { const t = Math.abs(i - (bw - 1) / 2) / (bw / 2); px(cx + i, cy + Math.round(t * 1.4), 1, bh - Math.round(t * 2.4), A.shade('#8a6038', 0.22 - t * 0.7)); }
-      px(cx, cy + 2, bw, 1, '#3f2a16'); px(cx, cy + bh - 3, bw, 1, '#3f2a16');
-    };
-    const rope = (cx, cy) => { for (let r = 5; r > 1; r--) { px(cx - r, cy - r / 2, r * 2, 1, r % 2 ? '#a89060' : '#826c44'); } px(cx - 5, cy + 2, 10, 1, 'rgba(10,16,26,0.35)'); };
+    const crate = (cx, cy, cw) => pCrate(px, cx, cy, cw);
+    const barrel = (cx, cy, bw, bh) => pBarrel(px, cx, cy, bw, bh);
+    const rope = (cx, cy) => pRope(px, cx, cy);
     crate(6, seaY - 22, 11); crate(15, seaY - 17, 8); barrel(W - 26, seaY - 20, 9, 13); barrel(W - 15, seaY - 17, 8, 11);
     rope(Math.round(W * 0.42), seaY - 8); crate(Math.round(W * 0.64), seaY - 15, 7);
 
@@ -346,7 +429,14 @@ export class PortScene {
 
     }
 
-    if (!L) { this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg); } else { this.bg = null; }
+    if (!L) { this.bg = new Sprite(canvasTexture(cv)); this.scene.addChild(this.bg); } else {
+      this.bg = null;
+      // 手绘底图是整片海域共用的，靠这一层把每个港区分开
+      const props = this.drawQuayProps(p, W, H, groundY, seaY);
+      this.props = new Sprite(canvasTexture(props.canvas)); this.props.eventMode = 'none'; this.scene.addChild(this.props);
+      this.windows.push(...props.lamps);
+      this.addMooredBoats(p, W, seaY, seeded(hash(p.id) + 313));
+    }
 
     /* 窗灯（夜晚） */
     this.glow = new Graphics();
@@ -363,7 +453,8 @@ export class PortScene {
     for (let i = 0; i < 4; i++) { const g = new Sprite(this.gullTex[0]); g.anchor.set(0.5); g.eventMode = 'none'; g.position.set(rng() * W, 12 + rng() * (horizon - 24)); g.vx = (8 + rng() * 9) * (rng() < 0.5 ? -1 : 1); g.scale.x = g.vx > 0 ? 1 : -1; g.phase = rng() * 6; g.baseY = g.y; this.scene.addChild(g); this.gulls.push(g); }
     /* 路人 */
     this.peds = [];
-    for (let i = 0; i < 6; i++) {
+    const pedN = p.tier >= 3 ? 8 : p.tier === 2 ? 6 : 4;      // 大港更热闹
+    for (let i = 0; i < pedN; i++) {
       const v = Math.floor(rng() * SHIRTS.length); const sp = new Sprite(this.pedTex[v][0]);
       sp.anchor.set(0.5, 1); sp.eventMode = 'none';
       const depth = rng();                                            // 近处的人更大更暗一点，拉开层次
@@ -628,6 +719,7 @@ export class PortScene {
     if (this.markers) for (const k in this.markers) { const mk = this.markers[k]; if (mk.visible) mk.y = mk.baseY + Math.sin(t * 4) * 4; }
     this.foam.texture = this.foamTex[Math.floor(t * 2) % 2];
     this.ship.texture = this.shipTex.E[Math.floor(t * 1.6) % 2];
+    if (this.moored) for (const m of this.moored) { m.texture = this.shipTex.E[Math.floor(t * 1.1 + m.phase) % 2]; m.y = m.baseY || (m.baseY = m.y); m.y = m.baseY + Math.sin(t * 1.4 + m.phase) * 1.2; }
     if (this.smokePos) { this.smokeT += dt; if (this.smokeT > 0.35) { this.smokeT = 0; const g = new Graphics().rect(0, 0, 2, 2).fill(0xd8d8d8); g.position.set(this.smokePos.x, this.smokePos.y); g.alpha = 0.7; this.smokeLayer.addChild(g); this.smoke.push({ g, life: 2.2 }); } }
     for (const s of this.smoke) { s.life -= dt; s.g.y -= dt * 6; s.g.x += Math.sin(t * 3 + s.life) * dt * 3; s.g.alpha = Math.max(0, s.life / 2.2) * 0.7; s.g.scale.set(1 + (2.2 - s.life) * 0.5); }
     this.smoke = this.smoke.filter(s => { if (s.life <= 0) { s.g.destroy(); return false; } return true; });
