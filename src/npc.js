@@ -180,7 +180,7 @@ export class NpcFleet {
         }
         v.npc = n; v.c.visible = true; this.views.set(n.id, v);
         // 船型剪影按规模分三档
-        const sc = n.kind === 'fisher' ? 1.0 : n.ships >= 3 ? 1.9 : n.ships === 2 ? 1.5 : 1.2;
+        const sc = n.kind === 'fisher' ? 0.62 : n.ships >= 3 ? 1.12 : n.ships === 2 ? 0.9 : 0.74;
         v.baseScale = sc; v.spr.scale.set(sc);
         v.spr.tint = TINT[n.faction];
         v.flag.clear().rect(-2, -8 - sc * 8, 7, 4).fill(FACTION_COLOR[n.faction] || 0xcccccc);

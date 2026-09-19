@@ -31,11 +31,11 @@ export class WorldMap {
     this.world.scale.set(this.zoom);
 
     // 海面：两层平铺
-    this.waterFrames = makeWaterFrames(4, 2);
+    this.waterFrames = makeWaterFrames(6, 2);
     this.water = new TilingSprite({ texture: this.waterFrames[0], width: MAP_W * WS, height: MAP_H * WS });
     this.world.addChild(this.water);
-    this.water2 = new TilingSprite({ texture: this.waterFrames[2], width: MAP_W * WS, height: MAP_H * WS });
-    this.water2.alpha = 0.32; this.water2.tilePosition.set(11, 7); this.world.addChild(this.water2);
+    this.water2 = new TilingSprite({ texture: this.waterFrames[3], width: MAP_W * WS, height: MAP_H * WS });
+    this.water2.alpha = 0.18; this.water2.tilePosition.set(11, 7); this.world.addChild(this.water2);
 
     // 真实世界陆地
     this.land = new Sprite(canvasTexture(makeWorldLandCanvas()));
@@ -55,13 +55,18 @@ export class WorldMap {
 
     // 港口
     this.portLayer = new Container(); this.world.addChild(this.portLayer); this.ports = {};
-    const icon = makePortIcon();
+    const iconCache = new Map();
+    const iconFor = p => {
+      const key = `${zone(p.zone)?.style || 'iberian'}|${p.tier}`;
+      if (!iconCache.has(key)) iconCache.set(key, makePortIcon(zone(p.zone)?.style || 'iberian', p.tier));
+      return iconCache.get(key);
+    };
     for (const p of PORTS) {
       const c = new Container(); c.position.set(projX(p.lon) * WS, projY(p.lat) * WS);
       c.eventMode = 'static'; c.cursor = 'pointer'; c.hitArea = new Rectangle(-16, -20, 32, 38);
       const ring = new Graphics(); c.addChild(ring);
-      const tierS = p.tier >= 3 ? 1.5 : p.tier === 2 ? 1.15 : 0.85;
-      const spr = new Sprite(icon); spr.anchor.set(0.5, 0.7); spr.scale.set(tierS); c.addChild(spr);
+      const tierS = p.tier >= 3 ? 1.15 : p.tier === 2 ? 0.92 : 0.72;
+      const spr = new Sprite(iconFor(p)); spr.anchor.set(0.5, 0.78); spr.scale.set(tierS); c.addChild(spr);
       const yardG = new Graphics(); c.addChild(yardG);
       const label = new Text({ text: p.name, style: { fontFamily: FONT, fontSize: 11, fill: '#e8f0f8', stroke: { color: '#06101a', width: 3 } } });
       label.anchor.set(0.5, 0); label.position.set(0, 9 * tierS); c.addChild(label);
@@ -137,7 +142,7 @@ export class WorldMap {
       o.label.visible = o.p.tier >= minTier || o.p.id === S.pos || o.p.id === S.dest;
     }
     for (const t of this.zoneLabels) { t.scale.set(k); t.alpha = this.zoom < 1.3 ? 0.55 : 0.2; }
-    this.ship.scale.set(2.2 * k * (this.flip ? -1 : 1), 2.2 * k);
+    this.ship.scale.set(1.35 * k * (this.flip ? -1 : 1), 1.35 * k);
     if (this.npc) this.npc.setScale(k);
   }
 
@@ -272,7 +277,7 @@ export class WorldMap {
   tick(t) {
     const dt = Math.min(0.05, t.deltaMS / 1000);
     this.frameT += t.deltaMS;
-    if (this.frameT > 350) { this.frameT = 0; this.frame = (this.frame + 1) % this.waterFrames.length; this.water.texture = this.waterFrames[this.frame]; this.water2.texture = this.waterFrames[(this.frame + 2) % 4]; }
+    if (this.frameT > 350) { this.frameT = 0; this.frame = (this.frame + 1) % this.waterFrames.length; this.water.texture = this.waterFrames[this.frame]; this.water2.texture = this.waterFrames[(this.frame + 3) % this.waterFrames.length]; }
     const ws = S && S.weather?.type === 'storm' ? 3 : S && S.weather?.type === 'rain' ? 1.6 : 1;
     this.water.tilePosition.x += dt * 5 * ws; this.water.tilePosition.y += dt * 1.5 * ws;
     this.water2.tilePosition.x -= dt * 3 * ws; this.water2.tilePosition.y += dt * 2.5 * ws;
@@ -296,7 +301,7 @@ export class WorldMap {
     const bob = Math.floor(performance.now() / (S.dest ? 280 : 700)) % 2;
     this.ship.texture = this.shipTex[this.dir][bob];
     const k = clamp(1 / this.zoom, 0.5, 2.0);
-    this.ship.scale.set(2.2 * k * (this.flip ? -1 : 1), 2.2 * k);
+    this.ship.scale.set(1.35 * k * (this.flip ? -1 : 1), 1.35 * k);
   }
   updateNight() {
     const lonShift = (S.ship.x / MAP_W - 0.5) * 0.5;      // 经度带来的时差

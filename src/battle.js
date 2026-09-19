@@ -31,7 +31,7 @@ export class BattleScene {
     const vw = this.app.screen.width, vh = this.app.screen.height;
     this.R = Math.floor(Math.min((vw - 24) / (SQ3 * (COLS + 0.5)), (vh - 60) / (1.5 * ROWS + 0.5)));
     const R = this.R; this.ox = Math.round((vw - SQ3 * R * (COLS + 0.5)) / 2 + SQ3 * R / 2); this.oy = Math.round((vh - (1.5 * ROWS + 0.5) * R) / 2 + R);
-    this.sc = Math.max(2, Math.floor(R * 1.5 / 16));
+    this.sc = Math.max(1, Math.round(R * 1.5 / 32 * 2) / 2);
 
     this.water = new TilingSprite({ texture: this.waterFrames[0], width: vw, height: vh }); this.root.addChild(this.water);
     this.gridG = new Graphics(); this.root.addChild(this.gridG);
