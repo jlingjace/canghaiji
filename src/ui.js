@@ -53,7 +53,7 @@ function renderQuests() {
   const bar = (v, t) => `<div class="hpbar"><i style="width:${clamp(v / t * 100, 0, 100)}%;background:${v >= t ? 'var(--good)' : 'var(--gold)'}"></i></div>`;
   const rewardTxt = r => [r?.gold ? fmt(r.gold) + ' 金币' : '', r?.sharePts ? `${zone(r.shareZone).name}份额 +${r.sharePts}` : '', r?.ship ? SHIP_TYPES[r.ship].name : '', r?.cannons ? `火炮 +${r.cannons}` : '', r?.crew ? `船员 +${r.crew}` : ''].filter(Boolean).join(' · ');
   const card = q => `<div class="card"><div class="row"><b>${q.type === 'main' ? '◆ ' : ''}${q.title}</b><span class="muted" style="font-size:11px">${CHARS[q.giver]?.name || ''}</span><span class="spacer"></span>${Q.qStatus(q.id) === 'ready' ? `<span class="badge low">可交付 → ${port(q.turnIn).name}</span>` : ''}</div>
-    ${q.objectives.map((o, i) => { const v = Q.objValue(q, i), t = Q.objTarget(o); return `<div style="font-size:12px;margin-top:4px">${Q.objDone(q, i) ? '☑' : '☐'} ${o.label} <span class="muted">${Math.min(v, t)}/${t}</span>${bar(v, t)}</div>`; }).join('')}
+    ${q.objectives.map((o, i) => { const t = Q.objTarget(o), v = Q.objShown(q, i); return `<div style="font-size:12px;margin-top:4px">${Q.objDone(q, i) ? '☑' : '☐'} ${o.label} <span class="muted">${Math.min(v, t)}/${t}</span>${bar(v, t)}</div>`; }).join('')}
     ${rewardTxt(q.reward) ? `<div class="muted" style="font-size:11px;margin-top:4px">奖励：${rewardTxt(q.reward)}</div>` : ''}</div>`;
   const act = Q.activeQuests(); const mains = act.filter(q => q.type === 'main'), sides = act.filter(q => q.type === 'side');
   const nm = Q.nextMain(); let hint = '';
@@ -113,7 +113,7 @@ function planVoyage(pid) {
   if (S.supplies >= need) add('ok', '补给', `${S.supplies} / 需要约 ${need}（日耗 ${g.dailySupply()}）`);
   else if (S.supplies >= need * 0.7) add('warn', '补给', `${S.supplies} / 需要约 ${need}，勉强够，建议补到 ${need + g.dailySupply() * 3}`);
   else add('bad', '补给', `只有 ${S.supplies}，需要约 ${need}。撑到第 ${Math.max(1, Math.floor(S.supplies / g.dailySupply()))} 天断粮，之后 ${g.HUNGER_GRACE} 天半口粮，再往后每天减员`);
-  const guns = g.totalCannons ? g.totalCannons() : S.fleet.reduce((a, sh) => a + sh.cannons, 0);
+  const guns = S.fleet.reduce((a, sh) => a + sh.cannons, 0);
   const bare = S.fleet.filter(sh => sh.cannons < T(sh).cannons * 0.35);
   if (bare.length) add('warn', '火炮', `${bare.map(x => x.name).join('、')} 火炮不足四成，遇上海盗很吃亏（造船厂 150 金币/门）`);
   else add('ok', '火炮', `全队 ${guns} 门，武装充足`);
@@ -147,13 +147,14 @@ function afterStateSwap() {
   // setMode 会立刻重建港口街景，而街景要查任务标记——必须先把任务 / 委托状态补齐，
   // 否则新开局时 portMarkers 会读到 undefined 直接抛异常。
   Q.ensureQuestState(); C.ensureContracts();
+  map.resetView();
   map.setMode(S.dest ? 'sea' : 'port');
   renderMapCtl(); render();
 }
-function arrive(pid) {
+function arrive(pid, from = null) {
   flash(); map.setMode('port'); audio.sfx('bell'); S.escorted = false;
   if (S.supplies >= g.dailySupply()) S.hunger = 0;
-  C.contractEvent('arrive', { pid }); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
+  C.contractEvent('arrive', { pid, from }); g.remember(pid); g.log(`抵达 ${port(pid).name}。`, 'good');
   S.tab = 'port'; S.ptab = 'market'; Q.questEvent('arrive', { pid }); g.save(true); render();
 }
 
@@ -344,17 +345,22 @@ function portDirectory() {
 
 /** 某商品在已知港口中的最佳去处：{p, price, profit, days, perDay} */
 function bestMarket(gid, fromPid = S.pos) {
-  const here = port(fromPid); const cost = g.buyPrice(here, gid);
+  const here = port(fromPid);
+  // 按**打算成交的量**估价，不是按单件牌价。成交量越大均价越吃亏，
+  // 用牌价算出来的「每件 +80」在真买满一船之后可能只剩 +20，甚至是负的——
+  // 这一栏是玩家做决策的主要依据，不能只报一个永远达不到的最好情况。
+  const qty = Math.max(1, Math.min(g.maxAffordable(here, gid, Math.max(0, S.gold), g.freeSpace()) || 0, g.capacity()));
+  const cost = g.quote(here, gid, qty, 'buy').unit;
   let best = null;
   for (const pid in S.mem) {
     if (pid === fromPid) continue;
     const pr = S.mem[pid].prices[gid]; if (pr == null) continue;
     const p = port(pid);
-    const sell = g.sellFromSpot(p, pr);
+    const sell = g.sellUnitFor(p, pr, qty);
     const days = g.voyageDays(p.id);          // 用真实绕行航程，直线会把绕好望角的航线少算一半
     const profit = sell - cost;
     const perDay = profit / days;
-    if (profit > 0 && (!best || perDay > best.perDay)) best = { p, price: sell, profit, days, perDay };
+    if (profit > 0 && (!best || perDay > best.perDay)) best = { p, price: sell, profit, days, perDay, qty };
   }
   return best;
 }
@@ -488,14 +494,14 @@ function renderMarket(p) {
     else if (cap > 0 && q.unit > bp) note = `<span class="muted">买满 ${cap} 件均价 ${q.unit}（+${Math.round((q.unit / bp - 1) * 100)}%）</span>`;
     const holdTxt = have ? `${have}${held ? `<br><span class="muted" style="font-size:10px">${held} 托运</span>` : ''}` : '<span class="muted">-</span>';
     return `<tr><td>${gd.name} ${tag}</td><td class="r">${bp} / <span class="muted">${sp}</span>${note ? `<br><span style="font-size:10px">${note}</span>` : ''}</td><td class="r">${holdTxt}</td>
-      <td style="font-size:11px">${bm ? `<span class="good">${bm.p.name}</span> +${bm.profit}<br><span class="muted">${bm.days} 天 · ${bm.perDay.toFixed(1)}/天</span>` : '<span class="muted">—</span>'}</td>
+      <td style="font-size:11px">${bm ? `<span class="good">${bm.p.name}</span> +${bm.profit}<br><span class="muted">${bm.days} 天 · ${bm.perDay.toFixed(1)}/天 · 按 ${bm.qty} 件</span>` : '<span class="muted">—</span>'}</td>
       <td><span class="row nowrap"><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="1">买1</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="10">买10</button><button class="btn sm" data-a="buy" data-g="${gd.id}" data-q="max">买满</button>
       <button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="10" ${free ? '' : 'disabled'}>卖10</button><button class="btn sm" data-a="sell" data-g="${gd.id}" data-q="all" ${free ? '' : 'disabled'}>全卖</button></span></td></tr>`;
   }).join('');
   return `<div class="card"><div class="row"><b>补给</b> <span class="muted">${g.SUPPLY_PRICE} 金币/单位 · 现有 ${S.supplies} · 日耗 ${g.dailySupply()} · 空舱 ${g.freeSpace()}</span></div>
     <div class="row" style="margin-top:6px"><button class="btn sm" data-a="buySup" data-q="10">+10</button><button class="btn sm" data-a="buySup" data-q="50">+50</button><button class="btn sm" data-a="buySup" data-q="max">买满</button><button class="btn sm" data-a="sellSup" data-q="10">卖10</button></div></div>
-    <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>最佳去处（每件）</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="muted" style="font-size:12px">买卖之间固定有 ${Math.round(g.SPREAD * (1 - g.tradeEdge(p)) * 200)}% 的价差，原地买了再卖必然亏本；成交量越大，均价越吃亏——<b>低买高卖要靠跑距离，不是靠来回刷</b>。价格冲击每天回落约 1.4%，停泊等待也能让行情恢复。<br>「最佳去处」依据你已到访或打听到的行情估算，已计入价差与航程天数。</p>`;
+    <div class="scroll"><table><thead><tr><th>商品</th><th class="r">买入 / 卖出</th><th class="r">持有</th><th>最佳去处（每件净利）</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="muted" style="font-size:12px">买卖之间固定有 ${Math.round(g.SPREAD * (1 - g.tradeEdge(p)) * 200)}% 的价差，原地买了再卖必然亏本；成交量越大，均价越吃亏——<b>低买高卖要靠跑距离，不是靠来回刷</b>。价格冲击每天回落约 1.4%，停泊等待也能让行情恢复。<br>「最佳去处」依据你已到访或打听到的行情估算，已计入价差、航程天数，以及按你现在的购买力买满一船所造成的价格冲击。</p>`;
 }
 function renderYard(p) {
   const forSale = YARD_SHIPS[p.yard].map(t => { const s = SHIP_TYPES[t];
@@ -526,7 +532,7 @@ function renderTavern(p) {
     <div class="card"><b>停泊休整</b> <span class="muted">停泊期间不消耗补给。跨月时物价会重新波动、对手商会会行动。</span><div class="row" style="margin-top:6px"><button class="btn" data-a="rest" data-d="7">停泊 7 天</button><button class="btn" data-a="rest" data-d="30">停泊 30 天</button></div></div>`;
 }
 function renderInvest(p) {
-  const z = zone(p.zone); const cur = S.share[z.id].player; const est = a => (a / (400 + 10 * cur)).toFixed(1);
+  const z = zone(p.zone); const cur = S.share[z.id].player; const est = a => g.investPts(a, cur).toFixed(1);
   return `<div class="card"><b>${z.name} 势力份额</b>${shareBar(z.id)}
     <p class="muted" style="font-size:12px;margin-top:8px">份额 ≥ 50% 即主导该海域：每月获得「份额 × 40」金币收益，并让该海域所有港口的买卖价差收窄 25%（买价约便宜 1.4%、卖价约高 1.4%）。主导 ${VICTORY_ZONES} 片海域即获胜。</p></div>
     <div class="card"><b>向 ${p.name} 投资</b> <span class="muted">建设港口以提升你的商会在 ${z.name} 的份额。份额越高，进一步扩张的成本越高。</span>
@@ -681,7 +687,7 @@ export const ACTIONS = {
   bfireAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('fire', u); },
   bboardAt: d => { const u = (B?.units || []).find(x => x.id === d.e); if (u) map.battle.act('board', u); }, bboard: () => map.battle.act('board'), bcancel: () => map.battle.act('cancel'),
   bwait: () => map.battle.act('wait'), bend: () => map.battle.act('endTurn'), bflee: () => map.battle.act('flee'),
-  battleDone: () => { const info = B ? { won: B.result === 'win', kind: B.kind, rivalId: B.rivalId, boss: B.boss, npc: B.npc } : null; const cb = g.clearBattle(); map.battle.end(); closeModal(); map.setMode(S.dest ? 'sea' : 'port'); if (info && info.won) { Q.questEvent('battleWin', info); C.contractEvent('battleWin', info); }
+  battleDone: () => { const info = B ? { won: B.result === 'win', kind: B.kind, rivalId: B.rivalId, zone: B.zone, boss: B.boss, npc: B.npc } : null; const cb = g.clearBattle(); map.battle.end(); closeModal(); map.setMode(S.dest ? 'sea' : 'port'); if (info && info.won) { Q.questEvent('battleWin', info); C.contractEvent('battleWin', info); }
     if (info && info.npc) {
       N.addRep(info.npc.faction, info.won ? -22 : -8);
       if (info.npc.faction !== 'pirate') N.addRep('pirate', 4);
@@ -695,7 +701,10 @@ export function initUI(worldMap) {
   Object.assign(hooks, { render, renderTop, showModal, closeModal, toast, renderBattle, onArrive: arrive, rollEvent,
     routeLen: pid => map.routeLen(pid), npcDay: d => map.npc.day(d),
     routeBetween: (a, b) => map.routeBetween(a, b),
-  onCargo: () => { if (!S.dest) C.recheckHere(); },      // 停泊时货物一变就复判委托，别只在抵港时算
+    // 停泊时货物一变就复判委托与任务，别只在抵港时算：
+    // 「运 20 匹丝绸到某港」的任务，玩家常常是先到港、再在本地把货买齐，
+    // 只认 arrive 的话这类任务要等到下次出海再回来才结算。silentOffer 保证不会因为买卖货物反复弹接任务。
+  onCargo: () => { if (!S.dest) { C.recheckHere(); Q.questEvent('arrive', { pid: S.pos, silentOffer: true }); } },
     dayTick: () => C.contractEvent('day'),
     onEvent: Q.questEvent, showDialogue, hoverPort: showPortTip,
     questPorts: () => { const s = Q.questPorts(); for (const c of C.activeContracts()) s.add(c.to); return s; },

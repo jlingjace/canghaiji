@@ -12,6 +12,7 @@
  * 用法: node tools/playthrough.mjs [--strategy=trade|quest|contract|mixed] [--years=30] [--seed=1] [--json]
  */
 global.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+global.document = { querySelector: () => null };      // quests.flushDialogues 会查「有没有别的弹窗挡着」
 
 import { readFileSync } from 'node:fs';
 import * as g from '../src/game.js';
@@ -44,7 +45,20 @@ let pendingDialogue = 0;
 Object.assign(g.hooks, {
   render() {}, renderTop() {}, showModal() {}, closeModal() {}, toast() {}, renderBattle() {},
   openPortTab() {}, openSeaMap() {}, hoverPort() {}, npcDay() {},
-  showDialogue() { pendingDialogue++; },
+  showDialogue(pages, opts = {}) {
+    pendingDialogue++;
+    // 决战对话是个「迎战 / 再准备准备」的选择，不作答的话主线会永远停在决战那一步。
+    // 其余对话一律点完就好：接任务由 takeQuestsHere() 直接调 Q.accept，
+    // 在这里再 accept 一次会把已有进度清零。
+    if (opts.accept && typeof opts.qid === 'string' && opts.qid.startsWith('boss:')) {
+      // 真人玩家不会拿一艘光船去送：明显不够打就先婉拒，回头攒够家当再来。
+      const guns = g.S.fleet.reduce((a, sh) => a + sh.cannons, 0);
+      if (g.S.fleet.length >= 5 && guns >= 60) opts.accept.onAccept();
+      else if (opts.accept.onDecline) opts.accept.onDecline();
+      return;
+    }
+    if (opts.onEnd) opts.onEnd();
+  },
   questPorts: () => Q.questPorts(),
   portMarkers: pid => Q.portMarkers(pid),
   onEvent: (t, d) => Q.questEvent(t, d),
@@ -73,31 +87,69 @@ function sail(pid) {
   } else if (r < 0.72) S.supplies += 3;
   else if (r < 0.86) { const gd = GOODS[Math.floor(Math.random() * GOODS.length)]; const q = Math.min(g.freeSpace(), 3 + Math.floor(Math.random() * 12)); if (q > 0) S.cargo[gd.id] = (S.cargo[gd.id] || 0) + q; }
   else { const sh = S.fleet[Math.floor(Math.random() * S.fleet.length)]; sh.crew = Math.max(1, sh.crew - Math.max(1, Math.floor(sh.crew * 0.1))); }
+  const from = S.pos;
   g.passDays(days + extra);
   S.pos = pid; S.dest = null; S.voyage = null;
   g.remember(pid);
-  C.contractEvent('arrive', { pid });
+  C.contractEvent('arrive', { pid, from });
   Q.questEvent('arrive', { pid });
   takeQuestsHere();
   Q.checkQuests();
+  drainStory();
   if (S.supplies >= g.dailySupply()) S.hunger = 0;
+  maybeEncounter(days + extra);
   return true;
 }
 
+/**
+ * 遇敌：按**在海上的天数**摇，不是按回合摇。
+ * 按回合摇会把「一回合只跑一小段」的打法（跑任务、跑短程委托）罚得莫名其妙的重——
+ * 同样的三十年，长途贸易只摇几十次，短程打法要摇几百次，于是测出来的不是策略差异，
+ * 而是回合数差异。港口里停着的时候不会被打劫。
+ */
+function maybeEncounter(days) {
+  const p = 1 - Math.pow(1 - 0.012, Math.max(1, days));     // 海上每天约 1.2%
+  if (Math.random() >= p) return;
+  const kind = Math.random() < 0.75 ? 'pirate' : 'rival';
+  const rid = ['whale', 'redsail', 'goldsand'][Math.floor(Math.random() * 3)];
+  resolveBattle(kind, kind === 'rival' ? rid : null, g.makeEnemy(kind), g.port(g.S.pos).zone);
+}
+
 /* ---------- 简化海战结算（伤害数学与 game.js 一致，但没有走位）---------- */
-function resolveBattle(kind, rivalId, enemy, zoneId) {
-  g.startBattle(kind, rivalId, enemy, zoneId, () => {});
-  const B = g.B;
-  let round = 0;
+/** 打完当前这场 B，并且**把战后通知补齐**——ui.js 的 battleDone 做的事这里一件都不能少 */
+function runBattle() {
+  const B = g.B; if (!B) return null;
+  let round = 0, result = 'flee';
+  // 真人玩家不会打到全灭：明显打不过就撤，撤退判定用游戏里同一个公式。
+  // 少了这一步，试玩里的战损会被系统性高估，一局会在「全灭→半资产→再全灭」里打转。
+  const power = f => f.reduce((a, s) => a + s.hp * 0.5 + s.cannons * 8 + s.crew * 0.6, 0);
   while (round++ < 40) {
     const mine = g.alive(g.S.fleet), foes = g.alive(B.enemy);
-    if (!mine.length) { g.endBattle('lose'); return 'lose'; }
-    if (!foes.length) { g.endBattle('win'); return 'win'; }
+    if (!mine.length) { result = 'lose'; break; }
+    if (!foes.length) { result = 'win'; break; }
+    if (round > 1 && power(mine) < power(foes) * 0.6 && Math.random() < g.fleeChanceAt(4)) { result = 'flee'; break; }
     for (const a of mine) { const t = foes[Math.floor(Math.random() * foes.length)]; if (t && t.hp > 0) g.fireAt(a, t, true, 1 + Math.floor(Math.random() * 3)); }
     const foes2 = g.alive(B.enemy);
     for (const a of foes2) { const t = mine[Math.floor(Math.random() * mine.length)]; if (t && t.hp > 0) g.fireAt(a, t, false, 1 + Math.floor(Math.random() * 3)); }
   }
-  g.endBattle('flee'); return 'flee';
+  g.endBattle(result);
+  // 胜利要通知任务与委托：少了这一步，剿匪委托、「击败 N 支船队」与决战
+  // 在无头试玩里永远不会推进，于是一半的主线看起来像是「卡住了」。
+  const info = { won: g.B.result === 'win', kind: g.B.kind, rivalId: g.B.rivalId, zone: g.B.zone, boss: g.B.boss, npc: g.B.npc };
+  const cb = g.clearBattle();
+  if (info.won) { Q.questEvent('battleWin', info); C.contractEvent('battleWin', info); }
+  if (cb) cb(0);
+  Q.checkQuests();
+  return result;
+}
+function resolveBattle(kind, rivalId, enemy, zoneId) { g.startBattle(kind, rivalId, enemy, zoneId, () => {}); return runBattle(); }
+/** 把剧情队列点完；决战对话会在回调里直接开打，所以要夹着战斗一起排空 */
+function drainStory() {
+  for (let i = 0; i < 40; i++) {
+    if (g.B) runBattle();
+    if (!Q.flushDialogues()) break;
+  }
+  if (g.B) runBattle();
 }
 
 /* ---------- 经营动作 ---------- */
@@ -122,6 +174,12 @@ function repairAll() { g.repairAll(); }
 function raiseCash() {
   if (takeFreightForCash()) return true;
   const S = g.S;
+  // 舱位塞满又没现金时，真人玩家会就地割肉把货变现，而不是原地枯坐。
+  // 少了这一条，一局会在「满舱 + 0 金币」的状态下空转二十几年。
+  if (capacityFree() < 10 || S.gold < 500) {
+    const keys = Object.keys(S.cargo).filter(k => g.sellable(k) > 0);
+    if (keys.length) { for (const k of keys) g.sell(k, 'all'); mark('满舱没钱时就地割肉变现'); return true; }
+  }
   if (S.gold < 500) {
     const i = S.fleet.findIndex(sh => sh.cannons > 4);
     if (i >= 0) { g.removeCannon(i, S.fleet[i].cannons - 4); mark('破产后拆炮换钱'); return true; }
@@ -190,14 +248,39 @@ function stepTrade() {
   g.sell(run.good, 'all');
 }
 
+/**
+ * 现金见底时先做生意回血，别继续空转。
+ * 之前没有这一步：一旦被战斗打穿家底，跑任务 / 跑委托的分支会因为买不起货、
+ * 买不起补给而每回合什么都不做，整整三十年停在「金币 0、一艘小帆船」的姿势上。
+ */
+function brokeGuard() {
+  if (g.S.gold >= 1500) return false;
+  if (raiseCash()) return true;
+  stepTrade();
+  return true;
+}
+
+/** 某样货最近的产地 */
+function nearestSource(gid) {
+  const src = PORTS.filter(p => p.produce.includes(gid))
+    .sort((a, b) => (routeUnits(g.S.pos, a.id) ?? 1e9) - (routeUnits(g.S.pos, b.id) ?? 1e9))[0];
+  return src ? src.id : null;
+}
+
 function stepContract() {
   const S = g.S;
   repairAll(); hireAll(); armAll(); upgradeFleet(); investIfRich();
+  if (brokeGuard()) return;
   const board = C.boardFor(S.pos).filter(c => !C.isTaken(c.id) && !C.isClosed(c.id));
   for (const c of board) {
     if (S.ct.active.length >= 1) break;
     if (c.kind === 'deliver' && capacityFree() < c.qty) continue;
-    if (c.kind === 'bounty') continue;
+    // 真人玩家会先看一眼「这单赶得上吗」：采购要先去产地再折回，路程是两段。
+    const legs = c.kind === 'procure'
+      ? (nearestSource(c.good) ? (routeUnits(S.pos, nearestSource(c.good)) ?? 0) + (routeUnits(nearestSource(c.good), c.to) ?? 0) : null)
+      : (routeUnits(S.pos, c.to) ?? 0);
+    if (legs == null) continue;
+    if (c.kind !== 'bounty' && Math.ceil(legs / g.dayDistance()) + 3 > c.days) continue;
     C.accept(c);
   }
   const act = C.activeContracts();
@@ -211,23 +294,29 @@ function stepContract() {
     g.buy(target.good, target.qty - (g.S.cargo[target.good] || 0));
     topUpSupplies(20); sail(target.to); return;
   }
-  // 真人玩家不会空着舱跑委托：顺路的货能带就带
+  // 真人玩家不会空着舱跑委托：先把补给买够，再拿剩下的舱位装顺路货
+  const legDays = Math.max(1, Math.ceil((routeUnits(S.pos, target.to) ?? 0) / g.dayDistance()));
+  topUpSupplies(legDays + 6);
   fillHoldTowards(target.to);
-  topUpSupplies(20);
   const carried = Object.keys(g.S.cargo).filter(k => g.sellable(k) > 0);
   sail(target.to);
   for (const k of carried) if (g.sellable(k) > 0) g.sell(k, 'all');
 }
 
-/** 顺路捎货：在剩余舱位里装一批能在目的地卖出更高价的货 */
+/**
+ * 顺路捎货：补给买完之后，剩下的舱位全部用来装能在目的地卖得更高的货。
+ * 这里曾经先留出「日耗 ×25」的舱位再装货——船队一大，日耗 30/天，
+ * 等于预留 750 格，于是后期整艘船空着跑委托，测出来的「跑委托赚不到份额」
+ * 其实是测试脚本自己不做生意。
+ */
 function fillHoldTowards(destId) {
   const S = g.S, here = g.port(S.pos), dest = g.port(destId);
   if (!dest) return;
-  let space = capacityFree() - Math.ceil(g.dailySupply() * 25);
+  const space = capacityFree();
   if (space < 8) return;
   let best = null;
   for (const gd of GOODS) {
-    const q = Math.min(space, g.maxAffordable(here, gd.id, Math.max(0, S.gold * 0.7), space));
+    const q = Math.min(space, g.maxAffordable(here, gd.id, Math.max(0, S.gold * 0.9), space));
     if (q < 5) continue;
     const profit = g.quote(dest, gd.id, q, 'sell').total - g.quote(here, gd.id, q, 'buy').total;
     if (profit > 0 && (!best || profit > best.profit)) best = { gid: gd.id, q, profit };
@@ -243,6 +332,7 @@ function stepQuest() {
   const S = g.S;
   repairAll(); hireAll(); armAll(); upgradeFleet(); investIfRich();
   takeQuestsHere(); Q.checkQuests();
+  if (brokeGuard()) return;
   const ready = Q.QUESTS.filter(q => Q.qStatus(q.id) === 'ready')[0];
   if (ready && ready.turnIn) { topUpSupplies(30); sail(ready.turnIn); return; }
   // 主线可能要求先去某个港口才开放，没事干就往还没解锁的主线港口走
@@ -287,13 +377,8 @@ const zoneLead = () => ZONES.filter(z => g.S.share[z.id].player >= 50).length;
 while (g.S.day < MAX_DAY && !g.S.won) {
   const before = g.S.day;
   try { step(); } catch (e) { log.notes.push(`第 ${g.S.day} 天策略异常：${e.message}`); g.rest(5); }
+  drainStory();
   turns++;
-  // 遇敌：按天数概率摇，越有钱越容易被盯上
-  if (Math.random() < 0.10) {
-    const kind = Math.random() < 0.75 ? 'pirate' : 'rival';
-    const rid = ['whale', 'redsail', 'goldsand'][Math.floor(Math.random() * 3)];
-    resolveBattle(kind, kind === 'rival' ? rid : null, g.makeEnemy(kind), g.port(g.S.pos).zone);
-  }
   if (g.S.day === before) {
     if (++stuck === 20) {
       // 记下卡住时的现场，再继续跑——提前结束会掩盖后面的问题
@@ -329,10 +414,14 @@ const out = {
   总天数: S.day, 总年数: +(S.day / 360).toFixed(1), 回合数: turns,
   金币: Math.round(S.gold), 净资产: netWorth(), 船队: S.fleet.length, 船队估值: g.fleetValue(),
   主导海域: `${zoneLead()}/${ZONES.length}（需 ${6}）`,
+  各海域份额: ZONES.map(z => `${z.name} ${Math.round(S.share[z.id].player)}`).join(' '),
+  份额合计: Math.round(ZONES.reduce((a, z) => a + S.share[z.id].player, 0)),
   完成任务: `${Q.QUESTS.filter(q => Q.qStatus(q.id) === 'done').length}/${Q.QUESTS.length}`,
   完成委托: S.ct.done, 违约委托: S.ct.failed,
   海战: `${S.stats.battles} 场，胜 ${S.stats.wins}`,
   交易次数: S.stats.trades,
+  成交总额: Math.round(S.stats.turnover || 0),
+  成交额折份额: Math.round((S.stats.turnover || 0) / g.SHARE_PER_GOLD),
   里程碑: log.milestones,
   季度快照: log.daily,
   异常: log.notes.slice(0, 20),

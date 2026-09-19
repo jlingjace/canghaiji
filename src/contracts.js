@@ -1,7 +1,7 @@
 /* 港口委托板：每个港口程序化生成的短期委托（运货 / 采购 / 剿匪 / 快航），
    让 30+ 个港口每一个都有去的理由。委托按「港口 + 时段」用种子生成，只有接下的才写进存档。 */
 import { PORTS, GOODS, G, ZONES } from './data.js';
-import { S, port, zone, price, log, freeSpace, transferShare, checkWin } from './game.js';
+import { S, port, zone, price, log, freeSpace, transferShare, checkWin, sellable, consigned } from './game.js';
 import { seeded, hash, clamp, fmt } from './util.js';
 import { projX, projY, greatCircleKm } from './geo.js';
 import { hooks } from './game.js';
@@ -72,8 +72,15 @@ export function boardFor(pid, period = periodOf(S.day)) {
       // 所以在本港现买现交必然亏本，只有从产地运来才划算。
       const gd = G[p.demand[Math.floor(rng() * p.demand.length)]];
       const qty = Math.round(clamp(8 + rng() * 30, 6, 45));
-      const due = 12 + Math.floor(rng() * 20);
+      // 期限与报酬都要看「最近的产地有多远」。紧缺货按定义就不是本地产的，
+      // 原先一律给 12~31 天、报酬也不计路程——产地在地球另一头的单子等于生下来就违约，
+      // 实测这是委托违约率居高不下的主因。
+      const srcD = Math.min(...PORTS.filter(x => x.produce.includes(gd.id)).map(x => routeUnits(p, x)), Infinity);
+      const trip = Number.isFinite(srcD) ? Math.ceil(srcD * 2 / DAY_UNITS) : 12;
+      const due = Math.max(12, Math.round(trip * (1.5 + rng() * 0.6)));
       out.push({ id, kind, from: pid, to: pid, good: gd.id, qty, days: due, client, flavor,
+        // 报酬里**不能**加路程项：一加上去，报酬就盖过了本地买价，
+        // 于是「就地买货 → 出港溜一圈 → 回来交差」变成稳赚（economy_audit 第 ④ 项会亮）。
         reward: Math.round(qty * gd.base * (1.25 + rng() * 0.30)),
         label: `为 ${p.name} 采购 ${gd.name} ×${qty}（${due} 天内）` });
     } else {
@@ -129,9 +136,10 @@ function finish(c, ok, quit = false) {
   if (ok) {
     S.ct.done++; S.gold += c.reward;
     const zid = port(c.to).zone;
-    // 固定 +0.6 抵不过三家对手每月约 5 点的反推，跑委托这条路永远拿不下一片海。
-    // 改成随报酬缩放：跑大单才有份额意义。
-    const pts = Math.round((0.6 + Math.min(1.9, c.reward / 3500)) * 10) / 10;
+    // 固定 +0.6 抵不过三家对手每月的反推，跑委托这条路永远拿不下一片海，
+    // 所以随报酬缩放。上限也去掉了：封顶 1.9 的话，跨洋跑一个月的大单
+    // 和邻港八天的小单拿一样多，等于劝玩家只挑短程刷——那正是最没意思的玩法。
+    const pts = Math.round((0.6 + c.reward / 2600) * 10) / 10;
     transferShare(zid, 'player', pts); checkWin();
     log(`完成委托「${c.label}」，获得 ${fmt(c.reward)} 金币，${zone(zid).name}份额 +${pts}。`, 'gold');
   } else {
@@ -153,18 +161,22 @@ function finish(c, ok, quit = false) {
 export function contractEvent(type, d = {}) {
   ensureContracts();
   const done = [];
+  // 这张运货委托自己名下的货：总量减去「别的运货委托占用的托运量」
+  const deliverHeld = c => (S.cargo[c.good] || 0) - (consigned(c.good) - c.qty);
   for (const c of [...S.ct.active]) {
     if (S.day > c.dueDay) { finish(c, false); continue; }   // 过期：每天都会检查一次，不必等到靠港
     if (type === 'arrive') {
-      if ((c.kind === 'deliver') && d.pid === c.to && (S.cargo[c.good] || 0) >= c.qty) {
+      if (c.kind === 'deliver' && d.pid === c.to && deliverHeld(c) >= c.qty) {
         S.cargo[c.good] -= c.qty; if (S.cargo[c.good] <= 0) delete S.cargo[c.good];
         done.push(c);
       } else if (c.kind === 'express' && d.pid === c.to) done.push(c);
-      else if (c.kind === 'procure' && d.pid === c.to && (S.cargo[c.good] || 0) >= c.qty) {
+      else if (c.kind === 'procure' && d.pid === c.to && d.from && d.from !== c.to && sellable(c.good) >= c.qty) {
+        // 必须是「从别处运来的」：允许就地现买现交的话，采购委托会变成
+        // 一台按报酬缩放的份额贩卖机，行情走低时连金币都净赚。
         S.cargo[c.good] -= c.qty; if (S.cargo[c.good] <= 0) delete S.cargo[c.good];
         done.push(c);
       }
-    } else if (type === 'battleWin' && c.kind === 'bounty' && d.kind === 'pirate') {
+    } else if (type === 'battleWin' && c.kind === 'bounty' && d.kind === 'pirate' && d.zone === c.zone) {
       c.prog = (c.prog || 0) + 1;
       if (c.prog >= c.count) done.push(c);
     }
@@ -176,12 +188,13 @@ export function contractEvent(type, d = {}) {
 /** 停泊时货物有变动（买入 / 接单）也要复判一次，否则「已经在交付港」的情况永远结算不了 */
 export function recheckHere() {
   if (S.dest) return [];
-  return contractEvent('arrive', { pid: S.pos });
+  return contractEvent('arrive', { pid: S.pos });   // 不带 from，所以只会结算 deliver / express
 }
 
 export function progressText(c) {
   if (c.kind === 'bounty') return `${c.prog || 0}/${c.count} 支`;
-  if (c.kind === 'deliver' || c.kind === 'procure') return `${Math.min(S.cargo[c.good] || 0, c.qty)}/${c.qty} 件`;
+  if (c.kind === 'deliver') return `${Math.min(Math.max(0, (S.cargo[c.good] || 0) - (consigned(c.good) - c.qty)), c.qty)}/${c.qty} 件`;
+  if (c.kind === 'procure') return `${Math.min(sellable(c.good), c.qty)}/${c.qty} 件`;
   return '';
 }
 export const daysLeft = c => c.dueDay - S.day;

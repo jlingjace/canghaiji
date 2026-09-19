@@ -94,6 +94,27 @@ function corePrice(p, gid) { return G[gid].base * baseMult(p, gid) * S.drift[p.i
 /** 挂牌价：成交 1 件时的中间价 */
 export function price(p, gid) { return Math.max(1, Math.round(corePrice(p, gid) * stockMult(S.stock[p.id][gid]))); }
 export const dominated = zid => S.share[zid].player >= 50;
+/** 每 SHARE_PER_GOLD 金币的成交额换 1 点势力份额 */
+export const SHARE_PER_GOLD = 24000;
+/**
+ * 贸易带来的势力份额。
+ *
+ * 这里**必须**是线性的。中间试过「每笔开平方」和「按累计额开平方再取差」，
+ * 两种都栽在同一个地方：√ 是凹函数，按笔结算等于直接奖励拆单——同样的钱
+ * 分成 200 笔卖能拿十几倍份额；而给它加每笔上限之后，一笔大单被削顶、
+ * 两百笔小单不受影响，反而更糟。线性是唯一能保证「拆单与整单完全等价」的形状，
+ * 当初真正的问题只是系数太大（总额/6000 → 纯贸易 1~5 年就通关），不是形状。
+ */
+export function addTradeShare(zid, amount) {
+  if (!(amount > 0)) return 0;
+  // 份额内部是浮点，不再量化到 0.1，所以直接按比例给就行：线性 + 精确 =
+  // 拆单与整单完全等价，不需要以前那本「不足 0.1 的零头」台账。
+  const pts = amount / SHARE_PER_GOLD;
+  transferShare(zid, 'player', pts);
+  return pts;
+}
+/** 投资的份额增量：UI 估算与实际结算必须共用这一个公式 */
+export const investPts = (amt, cur) => Math.min(3, Math.max(0, amt) / (6000 + 400 * cur));
 /** 议价优势：0=没有优势，最多只能收窄 60% 的价差，永远合不拢 */
 export function tradeEdge(p) {
   let e = 0;
@@ -107,6 +128,20 @@ export function buyPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) *
 export function sellPrice(p, gid) { return Math.max(1, Math.round(price(p, gid) * sideMult(p, 'sell'))); }
 /** 把已知的挂牌价折成卖出价（用于「最佳去处」这类只有记忆价的估算） */
 export const sellFromSpot = (p, spot) => Math.max(1, Math.round(spot * sideMult(p, 'sell')));
+/**
+ * 把已知的挂牌价折成「卖 qty 件时的平均单价」。
+ * 手上只有记忆里的牌价、没有对方港口的库存指数，所以按「库存指数 0」这个常态来估——
+ * 冲击每天都在往 0 回落，跑一趟长途过去通常也就回到 0 附近了。
+ * 重点是不能当成没有冲击：一整船砸下去，实际均价会比牌价低一截，
+ * 「最佳去处」照牌价报数的话，报的是一个永远达不到的最好情况。
+ */
+export function sellUnitFor(p, spot, qty = 1) {
+  qty = Math.max(1, Math.floor(qty));
+  const s1 = clamp(-IMPACT * qty, STOCK_LO, STOCK_HI);
+  const absorbed = Math.min(qty, Math.abs(s1) / IMPACT), over = qty - absorbed;
+  const f = (stockMult(s1 / 2) * absorbed + stockMult(STOCK_LO) * over) / qty;
+  return Math.max(1, Math.round(spot * f * sideMult(p, 'sell')));
+}
 
 /**
  * 成交报价：把库存冲击沿成交量积分（线性价格取中点即为精确积分）。
@@ -153,7 +188,23 @@ export function transferShare(zid, to, pts) {
   sh[to] += pts; normalizeShare(zid);
 }
 export function transferFrom(zid, from, to, pts) { const sh = S.share[zid]; pts = Math.min(pts, sh[from]); sh[from] -= pts; sh[to] += pts; normalizeShare(zid); }
-function normalizeShare(zid) { const sh = S.share[zid]; const tot = Object.values(sh).reduce((a, b) => a + b, 0); for (const k in sh) sh[k] = Math.round(sh[k] / tot * 1000) / 10; }
+/**
+ * 归一化到 100。
+ *
+ * 这里**不能**四舍五入到 0.1。曾经是 `Math.round(x/tot*1000)/10`，结果是：
+ * 玩家 +0.1，三家对手各 -0.033，而 33.2667 四舍五入回 33.3 —— 对手把刚失去的份额
+ * 原样捡了回来，总和涨到 100.1，下一次归一化再按 100.1 缩回去，缩掉的正是玩家那一份。
+ * 实测「+0.1 重复 1000 次」只拿到 50 点，而「一次 +100」拿到 100 点：
+ * 所有小额来源（贸易的 0.1、委托的 0.6~2.5、任务奖励）都被系统性打了对折，
+ * 而对手每月 0.8~2.6 的反推块头更大、损失更小——等于长期偏袒对手。
+ * 份额只在显示时取整就够了，内部保留精度。
+ */
+function normalizeShare(zid) {
+  const sh = S.share[zid];
+  const tot = Object.values(sh).reduce((a, b) => a + b, 0);
+  if (!(tot > 0)) return;
+  for (const k in sh) sh[k] = sh[k] / tot * 100;
+}
 export function zoneLeader(zid) { const sh = S.share[zid]; let best = null; for (const k in sh) if (!best || sh[k] > sh[best]) best = k; return best; }
 export function checkWin() {
   if (S.won) return;
@@ -207,7 +258,7 @@ export function monthTick() {
   const hot = ZONES.slice().sort((a, b) => S.share[b.id].player - S.share[a.id].player);
   for (const r of RIVALS) {
     const zid = Math.random() < 0.35 ? r.home : (Math.random() < 0.65 ? hot[Math.floor(Math.random() * 3)].id : pick(ZONES).id);
-    const push = rand(0.8, 2.6) * (1 + Math.min(0.6, S.share[zid].player / 80));   // 你越强，他们越用力
+    const push = rand(0.7, 2.2) * (1 + Math.min(0.3, S.share[zid].player / 160));   // 你越强，他们越用力
     transferShare(zid, r.id, push);
   }
   for (const p of PORTS) for (const g of GOODS) S.drift[p.id][g.id] = clamp(S.drift[p.id][g.id] * rand(0.92, 1.08), 0.75, 1.3);
@@ -247,6 +298,9 @@ export function weatherTick() {
 }
 export function setWeather(type, days) { S.weather = { type, days }; }
 export const weatherSpeed = () => S.weather?.type === 'storm' ? 0.72 : S.weather?.type === 'rain' ? 0.9 : 1;
+/** 坏天气让同样的距离多花天数。不乘这个的话风暴只拖慢真实秒数、一天都不会多花，
+    出航检查里那句「航速只有 72%」就是空话。 */
+export const weatherDayMul = () => 1 / weatherSpeed();
 
 /** 系统性减员（断粮 / 欠薪）的下限：最后一艘船必须还能出航，否则玩家在港内无路可走 */
 export function crewFloor(sh) { return S.fleet.length === 1 ? Math.max(1, Math.ceil(T(sh).crew * 0.2)) : 1; }
@@ -297,15 +351,38 @@ export function makeEnemy(kind) {
     n = fv < 8000 ? 1 : clamp(randInt(Math.max(1, S.fleet.length - 1), S.fleet.length + 1), 1, 5); names = ['黑旗号', '骷髅号', '怒涛号', '血月号', '秃鹫号', '毒鳐号'];
     cannonBudget = Math.max(3, Math.round(myCannons * rand(0.75, 1.15))); crewBudget = Math.max(8, Math.round(myCrew * rand(0.8, 1.15))); hpBudget = Math.max(60, Math.round(myHp * rand(0.75, 1.15)));
   } else {
-    // 商会船队是「硬仗」：数量、火力、耐久都要压过玩家一头，否则装满炮之后海战全是碾压
+    // 商会船队是「硬仗」，但只比玩家高一点点就够了。
+    // 之前写的是 ×1.0~1.3 再 +6 炮 +10 人、耐久 ×1.1~1.45 且不低于 200——
+    // 加上「预算不再被逐船 clamp 削掉」之后，这些系数是实打实兑现的，
+    // 实测三艘船的玩家赢面只有 10%，主线决战更是 4%：不是硬仗，是过不去的墙。
     pool = fv < 12000 ? ['schooner', 'merchant'] : fv < 45000 ? ['schooner', 'merchant', 'galleon'] : ['merchant', 'galleon', 'frigate'];
     n = clamp(randInt(S.fleet.length, S.fleet.length + 2), 2, 5); names = ['旗舰', '护航舰', '武装商船', '运输船', '巡逻舰'];
-    cannonBudget = Math.max(10, Math.round(myCannons * rand(1.0, 1.3)) + 6); crewBudget = Math.max(30, Math.round(myCrew * rand(1.0, 1.3)) + 10); hpBudget = Math.max(200, Math.round(myHp * rand(1.1, 1.45)));
+    cannonBudget = Math.max(8, Math.round(myCannons * rand(0.85, 1.1))); crewBudget = Math.max(24, Math.round(myCrew * rand(0.9, 1.15))); hpBudget = Math.max(120, Math.round(myHp * rand(0.95, 1.25)));
   }
-  return Array.from({ length: n }, (_, i) => {
-    const t = pick(pool), tt = SHIP_TYPES[t]; const hp = clamp(Math.round(hpBudget / n * rand(0.8, 1.2)), 40, tt.hp);
+  const ships = Array.from({ length: n }, (_, i) => {
+    const t = pick(pool), tt = SHIP_TYPES[t];
+    const hp = clamp(Math.round(hpBudget / n * rand(0.8, 1.2)), 40, tt.hp);
     return { type: t, name: names[i % names.length], hp, maxHp: hp, cannons: clamp(Math.round(cannonBudget / n * rand(0.75, 1.25)), 2, tt.cannons), crew: clamp(Math.round(crewBudget / n * rand(0.75, 1.2)), 5, tt.crew) };
   });
+  // 逐船 clamp 会把预算削掉一大截：5 艘单桅船塞不下按玩家规模算出来的火炮与人手，
+  // 于是「敌人船越多反而越弱」。把削掉的部分补回还有余量的船上，预算才真的是预算。
+  const spread = (key, budget, cap) => {
+    let left = Math.round(budget) - ships.reduce((a, s) => a + s[key], 0);
+    for (let pass = 0; left > 0 && pass < 5; pass++) {
+      const room = ships.filter(s => cap(s) > s[key]);
+      if (!room.length) return;
+      for (const s of room) {
+        const add = Math.min(left, Math.max(1, Math.ceil(left / room.length)), cap(s) - s[key]);
+        s[key] += add; left -= add;
+        if (left <= 0) return;
+      }
+    }
+  };
+  spread('hp', hpBudget, s => SHIP_TYPES[s.type].hp);
+  spread('cannons', cannonBudget, s => SHIP_TYPES[s.type].cannons);
+  spread('crew', crewBudget, s => SHIP_TYPES[s.type].crew);
+  for (const s of ships) s.maxHp = s.hp;
+  return ships;
 }
 export function startBattle(kind, rivalId, enemy, zoneId, onDone) {
   B = { kind, rivalId, enemy, zone: zoneId, log: [], onDone, round: 1, over: false, result: null };
@@ -384,9 +461,9 @@ export function sell(gid, q) {
   if (q <= 0) return;
   const spot = sellPrice(p, gid), qt = quote(p, gid, q, 'sell');
   S.gold += qt.total; S.cargo[gid] -= q; if (S.cargo[gid] <= 0) delete S.cargo[gid]; S.stats.trades++;
+  S.stats.turnover = (S.stats.turnover || 0) + qt.total;      // 累计成交额：份额进度的真正来源
   S.stock[p.id][gid] = qt.to;
-  // 用开平方而不是线性：小额交易的手感保留，大宗交易不再一单顶十单
-  transferShare(p.zone, 'player', Math.min(2.5, Math.sqrt(Math.max(0, qt.total)) / 110)); checkWin();
+  addTradeShare(p.zone, qt.total); checkWin();
   hooks.onEvent('sell', { gid, qty: q, pid: p.id });
   hooks.onCargo();
   remember(p.id); hooks.render();
@@ -460,7 +537,7 @@ export function invest(amt) {
   amt = +amt; if (S.gold < amt) return hooks.toast('金币不足');
   const p = port(S.pos); const cur = S.share[p.zone].player;
   // 投资的边际收益要随现有份额急剧递减，否则后期一次性砸钱就能买下一整片海
-  const pts = Math.min(3, amt / (6000 + 400 * cur));
+  const pts = investPts(amt, cur);
   S.gold -= amt; transferShare(p.zone, 'player', pts); S.dev[p.id] += amt / 5000; hooks.onEvent('invest', { pid: p.id, amt });
   log(`向 ${p.name} 投资 ${fmt(amt)} 金币，${zone(p.zone).name} 份额 +${pts.toFixed(1)}。`, 'good');
   checkWin(); hooks.render();
@@ -488,6 +565,13 @@ export function migrate() {
   S.weather = S.weather || { type: 'clear', days: 0 };
   S.ct = S.ct || { active: [], done: 0, failed: 0 };
   S.avgCost = S.avgCost || {};
+  delete S.sold;          // 旧的「不足 0.1 份额」零头台账，份额改成浮点后已用不上
+  // 锁存是后加的字段：老存档里已经 ready 的任务说明目标曾全部达成，必须回填，
+  // 否则读档后那条主线永远交不掉，而且卡着后面所有前置。
+  if (S.q) {
+    S.q.latched = S.q.latched || {};
+    for (const id in (S.q.status || {})) if (S.q.status[id] === 'ready' && !S.q.latched[id]) S.q.latched[id] = (S.day || 0) + 1;
+  }
   if (typeof S.hunger !== 'number') S.hunger = 0;
   ensureRep();
   for (const k of REP_KEYS) if (typeof S.rep[k] !== 'number') S.rep[k] = 0;
@@ -531,7 +615,12 @@ export function load(silent) {
       if (!silent) hooks.toast('地图数据已更新，旧存档不再兼容，已开启新航程');
       return false;
     }
-    S = d; migrate();
+    // 先换 S 再 migrate：万一 migrate 抛了（存档里有它没料到的形状），
+    // 当前这局就被换成了一份半初始化的状态，整个游戏当场作废。所以失败要能回滚。
+    const prev = S;
+    S = d;
+    try { migrate(); }
+    catch (e) { S = prev; if (!silent) hooks.toast('存档损坏，已保留当前进度'); return false; }
     if (!silent) { hooks.toast('已读取存档'); hooks.render(); }
     return true;
   } catch (e) { if (!silent) hooks.toast('读取失败'); return false; }

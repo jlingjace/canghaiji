@@ -1,7 +1,7 @@
 /* 海图场景：真实世界地图、平铺海面、港口（按规模/造船厂分级）、实时航行（绕行陆地）、缩放、昼夜 */
 import { Application, Container, Sprite, TilingSprite, Graphics, Text, Rectangle } from 'pixi.js';
 import { PORTS, ZONES, FACTION_COLOR } from './data.js';
-import { S, hooks, port, zone, zoneLeader, fleetSpeed, dayDistance, passDays, log, weatherTick, weatherSpeed, WEATHER_ICON } from './game.js';
+import { S, hooks, port, zone, zoneLeader, fleetSpeed, dayDistance, passDays, log, weatherTick, weatherSpeed, weatherDayMul, WEATHER_ICON } from './game.js';
 import { WeatherLayer } from './weather.js';
 import { audio } from './audio.js';
 import { makeWaterFrames, makeShipTextures, makePortIcon, makePortSymbol, makeWorldLandCanvas, canvasTexture } from './pixelart.js';
@@ -269,6 +269,20 @@ export class WorldMap {
     }
   }
 
+  /**
+   * 整份 S 被换掉之后（读档 / 新开局）重置表现层。
+   * 不做的话，上一局的航线金线、上一局的 NPC 船队、按旧船位算出来的航程缓存
+   * 会原封不动留在新地图上——看起来像是新开的局里凭空多出一条航线。
+   */
+  resetView() {
+    this.routeG.clear();
+    this.routeCache = null;
+    this.npc.reset();
+    this.follow = true;
+    this.placeShip(); this.snapCamera();
+    this.refreshPorts(); this.drawRoute();
+  }
+
   /* ----- 场景模式 ----- */
   setMode(m) {
     if (m === 'port' && S.dest) m = 'sea';
@@ -366,7 +380,7 @@ export class WorldMap {
       S.ship.x += dx / dist * step; S.ship.y += dy / dist * step;
       this.heading = Math.atan2(dy, dx); this.updateDir();
       v.traveled += step; budget -= step;
-      S.dayAcc += step / dayDistance();
+      S.dayAcc += step / dayDistance() * weatherDayMul();   // 风暴天同样的距离要多花天数
       while (S.dayAcc >= 1) { S.dayAcc -= 1; passDays(1); weatherTick(); v.days++; this.dayTick = true; }
     }
     if (this.dayTick) { this.dayTick = false; hooks.renderTop(); }
@@ -398,8 +412,11 @@ export class WorldMap {
   }
   arrive() {
     const pid = S.dest; const p = port(pid);
+    // 「从哪个港来的」要一路带给委托层：采购委托必须是从别处运来的货才算数，
+    // 判断依据只有这一个。存档里读回来的航程也有 voyage.from，所以中途存读档不会丢。
+    const from = (S.voyage && S.voyage.from) || null;
     S.ship = { x: projX(p.lon), y: projY(p.lat) }; S.dest = null; S.voyage = null; S.pos = pid;
-    this.routeG.clear(); this.refreshPorts(); hooks.onArrive(pid);
+    this.routeG.clear(); this.refreshPorts(); hooks.onArrive(pid, from);
   }
   updateDir() {
     const a = (this.heading + Math.PI * 2) % (Math.PI * 2);

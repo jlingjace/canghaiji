@@ -48,21 +48,32 @@ export function objValue(q, i) {
     default: return pr;
   }
 }
-export const objDone = (q, i) => !!(S.q && S.q.latched && S.q.latched[q.id]) || objValue(q, i) >= objTarget(q.objectives[i]);
 /**
- * 目标是否全部达成。
- * 「持有 N 金币」「份额达到 N」「船队达到 N 艘」这类目标读的是**实时状态**，
- * 会随着你花钱买船、对手反推而倒退回去——于是玩家被告知「可交付」，赶到交付港，
- * 交付却悄无声息地什么都没发生，而且这条主线还卡着后面的前置。
- * 所以一旦全部达成就锁存下来，之后状态怎么变都算数。
+ * 锁存表：按**单个目标**记，不是整条任务。
+ * 「持有 N 金币」「份额达到 N」「船队达到 N 艘」这类目标读的是实时状态，会随着你花钱买船、
+ * 对手反推而倒退回去——于是玩家被告知「可交付」，赶到交付港，交付却悄无声息地什么都没发生。
+ * 而如果只在「全部目标同时达成」时才锁存，「先攒够钱、再打决战」这种任务会彻底卡死：
+ * 钱一花出去，决战的前置又不成立了，决战永远触发不了。所以逐个目标锁存。
  */
-export const questObjectivesDone = q => {
+function latches(q) {
   ensureQuestState();
-  if (S.q.latched && S.q.latched[q.id]) return true;
-  if (!q.objectives.every((_, i) => objValue(q, i) >= objTarget(q.objectives[i]))) return false;
-  (S.q.latched || (S.q.latched = {}))[q.id] = S.day + 1;   // +1：第 0 天达成时 0 是假值，会让锁存失效
+  const L = S.q.latched;
+  let a = L[q.id];
+  if (typeof a === 'number') a = L[q.id] = q.objectives.map(() => a);   // 旧存档：整条任务一起锁存
+  if (!Array.isArray(a)) a = L[q.id] = q.objectives.map(() => 0);
+  while (a.length < q.objectives.length) a.push(0);
+  return a;
+}
+export function objDone(q, i) {
+  const a = latches(q);
+  if (a[i]) return true;
+  if (objValue(q, i) < objTarget(q.objectives[i])) return false;
+  a[i] = S.day + 1;                                        // +1：第 0 天达成时 0 是假值，会让锁存失效
   return true;
-};
+}
+/** 展示用进度：锁存过的目标不再随实时状态回落，否则进度条会和 ☑ 自相矛盾 */
+export const objShown = (q, i) => (objDone(q, i) ? Math.max(objValue(q, i), objTarget(q.objectives[i])) : objValue(q, i));
+export const questObjectivesDone = q => { ensureQuestState(); return q.objectives.every((_, i) => objDone(q, i)); };
 function bump(q, i, v, set = false) {
   const arr = S.q.progress[q.id] || (S.q.progress[q.id] = q.objectives.map(() => 0));
   arr[i] = set ? Math.max(arr[i], v) : arr[i] + v;
@@ -124,11 +135,27 @@ export function questEvent(type, d = {}) {
       }
     });
   }
-  // 决战触发：到达 boss 港口
-  if (type === 'arrive') for (const q of activeQuests()) {
-    if (qStatus(q.id) !== 'active') continue;
-    const i = q.objectives.findIndex(o => o.kind === 'boss' && o.port === d.pid);
-    if (i >= 0 && !objDone(q, i) && q.objectives.every((o, k) => k === i || objDone(q, k))) { triggerBoss(q, q.objectives[i]); return; }
+  // 决战触发：到达 boss 港口。
+  // 这里**不能** return：决战只是这次靠港的其中一件事，后面的任务结算与接取照样得跑，
+  // 否则决战港会变成一个「什么任务都接不到」的黑洞。
+  if (type === 'arrive') {
+    const fresh = S.q.bossAt !== d.pid;
+    if (fresh) { S.q.bossHold = {}; S.q.bossAt = d.pid; }                  // 换了港口就重新问一次
+    for (const q of activeQuests()) {
+      if (qStatus(q.id) !== 'active') continue;
+      const i = q.objectives.findIndex(o => o.kind === 'boss' && o.port === d.pid);
+      if (i < 0 || objDone(q, i)) continue;
+      if (!q.objectives.every((o, k) => k === i || objDone(q, k))) continue;
+      // 打输之后隔一阵子才会再遇上。没有这个冷却，输一场就能立刻原地再输一场，
+      // 而每输一场船队只剩一艘小帆船——玩家会被锁死在一个必输的循环里出不来。
+      const tried = (S.q.bossTried || {})[q.id];
+      if (tried != null && S.day - tried < BOSS_COOLDOWN) {
+        if (fresh) log(`${port(d.pid).name}的风声说，对方船队退回去舔伤口了，再过些天才会露面。`);
+        continue;
+      }
+      if ((S.q.bossHold || {})[q.id]) continue;                                    // 这趟停泊已经说过「再准备准备」
+      triggerBoss(q, q.objectives[i]); break;
+    }
   }
   checkQuests(type === 'arrive' ? d.pid : null);
   if (type === 'arrive' && !d.silentOffer) {
@@ -177,18 +204,40 @@ function complete(q) {
 }
 
 /* ---------- 决战 ---------- */
+const BOSS_COOLDOWN = 30;          // 打输之后的再战间隔（天）
 function triggerBoss(q, o) {
   const kind = o.rival ? 'rival' : 'pirate';
+  const pages = o.pre && o.pre.length ? o.pre : [{ who: kind === 'pirate' ? 'barro' : 'hector', text: '来得正好。今天就在这片海上分个高下！' }];
+  // 给一次拒战的机会：直接开打的话，玩家一靠港就被拖进战斗，修不了船也补不了炮，
+  // 输了再进港还是同一场必输的仗。
+  enqueue(pages, {
+    qid: 'boss:' + q.id, title: `决战 · ${q.title}`,
+    accept: {
+      label: '迎战', decline: '再准备准备',
+      onAccept: () => startBoss(q, o, kind),
+      onDecline: () => { (S.q.bossHold || (S.q.bossHold = {}))[q.id] = 1; log('你按下战意，先回港整备。再次入港时对方仍在等你。'); },
+    },
+  });
+}
+function startBoss(q, o, kind) {
+  (S.q.bossTried || (S.q.bossTried = {}))[q.id] = S.day;
   const enemy = makeEnemy(kind === 'rival' ? 'rival' : 'pirate');
-  // 强化：旗舰 + 加成
-  const boost = 1.35;
-  for (const e of enemy) { e.hp = Math.round(e.hp * boost); e.maxHp = e.hp; e.cannons = Math.min(SHIP_TYPES[e.type].cannons, Math.round(e.cannons * boost) + 2); e.crew = Math.min(SHIP_TYPES[e.type].crew, Math.round(e.crew * boost)); }
+  // 决战强度必须贴着「势均力敌」调：海战伤害近似平方律，双方差两成就几乎一边倒。
+  // 原来的写法是同级商会船队 ×1.35 再**白送一条旗舰**，实测满编六船只有 4% 赢面——
+  // 那不是硬仗，是一堵墙，而墙后面卡着整条主线。
+  // 现在旗舰顶替一条护卫，护卫整体略减，实测满编六船约 9 成、四船约 3 成、三船约 1 成。
+  const boost = 0.95;
+  for (const e of enemy) { e.hp = Math.round(e.hp * boost); e.maxHp = e.hp; e.cannons = Math.min(SHIP_TYPES[e.type].cannons, Math.round(e.cannons * boost) + 1); e.crew = Math.min(SHIP_TYPES[e.type].crew, Math.round(e.crew * boost)); }
   const flagT = S.fleet.length >= 3 ? 'frigate' : 'galleon'; const ft = SHIP_TYPES[flagT];
   const myHp = S.fleet.reduce((a, x) => a + x.hp, 0), myC = S.fleet.reduce((a, x) => a + x.cannons, 0);
-  enemy.unshift({ type: flagT, name: o.bossName || (kind === 'pirate' ? '黑潮号' : '旗舰'), hp: clamp(Math.round(myHp * 0.6), 120, ft.hp), maxHp: 0, cannons: clamp(Math.round(myC * 0.55) + 4, 6, ft.cannons), crew: clamp(Math.round(ft.crew * 0.8), 30, ft.crew) });
+  // 下限跟着玩家走。写死 120 耐久 / 6 门炮的话，船队被打残之后决战就是一道不可能的坎，
+  // 而决战又卡着主线，玩家只能重开。
+  const hpLo = clamp(Math.round(myHp * 0.5), 40, 120), cLo = clamp(Math.round(myC * 0.5), 2, 6);
+  if (enemy.length > 1) enemy.pop();                 // 旗舰顶替一条护卫，而不是凭空多一条
+  enemy.unshift({ type: flagT, name: o.bossName || (kind === 'pirate' ? '黑潮号' : '旗舰'), hp: clamp(Math.round(myHp * 0.6), hpLo, ft.hp), maxHp: 0, cannons: clamp(Math.round(myC * 0.35) + 3, cLo, ft.cannons), crew: clamp(Math.round(ft.crew * 0.8), 30, ft.crew) });
   enemy[0].maxHp = enemy[0].hp;
-  const pages = o.pre && o.pre.length ? o.pre : [{ who: kind === 'pirate' ? 'barro' : 'hector', text: '来得正好。今天就在这片海上分个高下！' }];
-  enqueue(pages, { title: `决战 · ${q.title}`, onEnd: () => { startBattle(kind, o.rival || null, enemy, port(o.port).zone, () => {}); B.boss = q.id; hooks.renderBattle(); } });
+  startBattle(kind, o.rival || null, enemy, port(o.port).zone, () => {});
+  B.boss = q.id; hooks.renderBattle();
 }
 
 /* ---------- 供地图 / 港口场景使用 ---------- */
