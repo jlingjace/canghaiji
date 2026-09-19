@@ -11,7 +11,7 @@ const routeUnits = (a, b) => {
   const v = hooks.routeBetween && hooks.routeBetween(a.id, b.id);
   return Number.isFinite(v) && v > 0 ? v : Math.hypot(projX(b.lon) - projX(a.lon), projY(b.lat) - projY(a.lat));
 };
-const DAY_UNITS = 48;        // 开局航速 6 的 dayDistance，委托期限以此为准
+const DAY_UNITS = 40;        // 按航速 5（大商船 / 盖伦）算，船队变大后不会系统性赶不上
 
 export const PERIOD = 20;                       // 每 20 天刷新一批委托
 export const periodOf = day => Math.floor(day / PERIOD);
@@ -55,16 +55,16 @@ export function boardFor(pid, period = periodOf(S.day)) {
       const dist = routeUnits(p, dest);
       const baseDays = Math.max(2, Math.ceil(dist / DAY_UNITS));
       if (kind === 'express') {
-        const due = Math.round(baseDays * (1.15 + rng() * 0.25));
+        const due = Math.round(baseDays * (1.35 + rng() * 0.35));
         out.push({ id, kind, from: pid, to: dest.id, days: due, client, flavor,
-          reward: Math.round((300 + dist * 1.6) * (1.3 + rng() * 0.5)),
+          reward: Math.round((450 + dist * 3.4) * (1.3 + rng() * 0.5)),
           label: `在 ${due} 天内抵达 ${dest.name}` });
       } else {
         const gd = GOODS[Math.floor(rng() * GOODS.length)];
         const qty = Math.round(clamp(10 + rng() * 40, 8, 60) / 2) * 2;
-        const due = Math.round(baseDays * (1.6 + rng() * 0.8));
+        const due = Math.round(baseDays * (1.9 + rng() * 0.9));
         out.push({ id, kind, from: pid, to: dest.id, good: gd.id, qty, days: due, client, flavor,
-          reward: Math.round((qty * gd.base * 0.35 + dist * 1.2) * (1 + rng() * 0.35)),
+          reward: Math.round((qty * gd.base * 0.45 + dist * 2.8) * (1 + rng() * 0.35)),
           label: `把 ${G[gd.id].name} ×${qty} 运到 ${dest.name}（${due} 天内）` });
       }
     } else if (kind === 'procure') {

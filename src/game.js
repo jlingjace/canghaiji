@@ -203,7 +203,13 @@ export function monthTick() {
   let income = 0;
   for (const z of ZONES) if (dominated(z.id)) income += Math.round(S.share[z.id].player * 40);
   S.gold += income;
-  for (const r of RIVALS) { const zid = Math.random() < 0.45 ? r.home : pick(ZONES).id; transferShare(zid, r.id, rand(0.8, 2.6)); }
+  // 对手会盯着玩家扩张最快的地方反推，而不是随机撒网
+  const hot = ZONES.slice().sort((a, b) => S.share[b.id].player - S.share[a.id].player);
+  for (const r of RIVALS) {
+    const zid = Math.random() < 0.35 ? r.home : (Math.random() < 0.65 ? hot[Math.floor(Math.random() * 3)].id : pick(ZONES).id);
+    const push = rand(0.8, 2.6) * (1 + Math.min(0.6, S.share[zid].player / 80));   // 你越强，他们越用力
+    transferShare(zid, r.id, push);
+  }
   for (const p of PORTS) for (const g of GOODS) S.drift[p.id][g.id] = clamp(S.drift[p.id][g.id] * rand(0.92, 1.08), 0.75, 1.3);
   ensureRep();
   for (const k of REP_KEYS) { const v = S.rep[k] || 0; S.rep[k] = Math.abs(v) < 1 ? 0 : Math.round(v - Math.sign(v) * Math.max(0.5, Math.abs(v) * 0.03)); }
@@ -369,7 +375,8 @@ export function sell(gid, q) {
   const spot = sellPrice(p, gid), qt = quote(p, gid, q, 'sell');
   S.gold += qt.total; S.cargo[gid] -= q; if (S.cargo[gid] <= 0) delete S.cargo[gid]; S.stats.trades++;
   S.stock[p.id][gid] = qt.to;
-  transferShare(p.zone, 'player', qt.total / 6000); checkWin();
+  // 用开平方而不是线性：小额交易的手感保留，大宗交易不再一单顶十单
+  transferShare(p.zone, 'player', Math.min(2.5, Math.sqrt(Math.max(0, qt.total)) / 110)); checkWin();
   hooks.onEvent('sell', { gid, qty: q, pid: p.id });
   hooks.onCargo();
   remember(p.id); hooks.render();
@@ -431,7 +438,9 @@ export function rumor() {
 }
 export function invest(amt) {
   amt = +amt; if (S.gold < amt) return hooks.toast('金币不足');
-  const p = port(S.pos); const cur = S.share[p.zone].player; const pts = amt / (400 + 10 * cur);
+  const p = port(S.pos); const cur = S.share[p.zone].player;
+  // 投资的边际收益要随现有份额急剧递减，否则后期一次性砸钱就能买下一整片海
+  const pts = Math.min(3, amt / (6000 + 400 * cur));
   S.gold -= amt; transferShare(p.zone, 'player', pts); S.dev[p.id] += amt / 5000; hooks.onEvent('invest', { pid: p.id, amt });
   log(`向 ${p.name} 投资 ${fmt(amt)} 金币，${zone(p.zone).name} 份额 +${pts.toFixed(1)}。`, 'good');
   checkWin(); hooks.render();
