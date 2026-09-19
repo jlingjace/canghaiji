@@ -154,6 +154,12 @@ export class NpcFleet {
   }
   render() {
     const m = this.map, z = m.zoom;
+    // 全球视角下几十条船会和港口糊在一起，直接不画
+    if (z < 0.7) {
+      if (this.hiddenAt !== z) { for (const [, v] of this.views) { v.c.visible = false; this.free.push(v); } this.views.clear(); this.hiddenAt = z; }
+      return;
+    }
+    this.hiddenAt = null;
     const vw = m.app.screen.width, vh = m.app.screen.height, pad = 80;
     const x0 = (-m.world.x - pad) / z, y0 = (-m.world.y - pad) / z;
     const x1 = (-m.world.x + vw + pad) / z, y1 = (-m.world.y + vh + pad) / z;

@@ -4,7 +4,7 @@ import { PORTS, ZONES, FACTION_COLOR } from './data.js';
 import { S, hooks, port, zone, zoneLeader, fleetSpeed, dayDistance, passDays, log, weatherTick, weatherSpeed, WEATHER_ICON } from './game.js';
 import { WeatherLayer } from './weather.js';
 import { audio } from './audio.js';
-import { makeWaterFrames, makeShipTextures, makePortIcon, makeWorldLandCanvas, canvasTexture } from './pixelart.js';
+import { makeWaterFrames, makeShipTextures, makePortIcon, makePortSymbol, makeWorldLandCanvas, canvasTexture } from './pixelart.js';
 import { PortScene } from './port.js';
 import { BattleScene } from './battle.js';
 import { NpcFleet } from './npc.js';
@@ -14,21 +14,34 @@ import { clamp } from './util.js';
 
 export const WS = 1;                       // 逻辑单位 → 世界像素
 const FONT = '"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif';
-export const ZOOM_MIN = 0.22, ZOOM_MAX = 3.4;
+export const ZOOM_MIN = 0.22, ZOOM_MAX = 4.0;
+/** 渲染分辨率：跟上设备像素比，否则在 Retina 上整个画面会被浏览器拉伸 2× 再平滑 */
+export const RES = Math.min(2, Math.max(1, Math.round((typeof window !== 'undefined' && window.devicePixelRatio) || 1)));
+/**
+ * 把缩放吸附到「一个逻辑像素正好等于整数个物理像素」的档位。
+ * 像素画在非整数倍下会出现忽宽忽窄的像素块，看起来就是锯齿与抖动；吸附之后完全消失。
+ * ≥1 时按 1/RES 步进（RES=2 → 1.0 / 1.5 / 2.0…），<1 时按整数倍缩小（1/2、1/3…）。
+ */
+export function snapZoom(z) {
+  if (z >= 1) return Math.max(1, Math.round(z * RES) / RES);
+  return 1 / Math.min(1 / ZOOM_MIN, Math.max(1, Math.round(1 / z)));
+}
 /* 航行视图：地图拉近，船按真实世界比例显示（不再是恒定屏幕尺寸的图标）。
    SHIP_W 是船在世界坐标里的尺寸系数，32px 贴图 × 0.78 ≈ 25 逻辑单位 ≈ 2 经纬度。 */
-export const SAIL_ZOOM = 1.9, PORT_ZOOM = 1.15, SHIP_W = 0.78;
+export const SAIL_ZOOM = 2, PORT_ZOOM = 1, SHIP_W = 0.78;
+/** LOD 阈值：低于 LOD_DETAIL 港口换符号，低于 LOD_SHIPS 不画 NPC 船 */
+export const LOD_DETAIL = 0.75, LOD_SHIPS = 0.7;
 
 export class WorldMap {
   constructor() {
     this.follow = true; this.speedMul = 1; this.onPortTap = () => {};
     this.frame = 0; this.frameT = 0; this.wakes = []; this.wakeT = 0; this.drag = null; this.dragDist = 0;
-    this.heading = 0; this.dir = 'E'; this.flip = false; this.mode = 'sea'; this.zoom = 0.85;
+    this.heading = 0; this.dir = 'E'; this.flip = false; this.mode = 'sea'; this.zoom = 1;
   }
 
   async init(el) {
     this.el = el; this.app = new Application();
-    await this.app.init({ resizeTo: el, background: '#0a2438', antialias: false, resolution: 1, autoDensity: false, preference: 'webgl' });
+    await this.app.init({ resizeTo: el, background: '#0a2438', antialias: true, resolution: RES, autoDensity: true, preference: 'webgl' });
     el.prepend(this.app.canvas);
     this.world = new Container(); this.app.stage.addChild(this.world);
     this.world.scale.set(this.zoom);
@@ -58,11 +71,17 @@ export class WorldMap {
 
     // 港口
     this.portLayer = new Container(); this.world.addChild(this.portLayer); this.ports = {};
-    const iconCache = new Map();
+    const iconCache = new Map(), symCache = new Map();
     const iconFor = p => {
       const key = `${zone(p.zone)?.style || 'iberian'}|${p.tier}`;
       if (!iconCache.has(key)) iconCache.set(key, makePortIcon(zone(p.zone)?.style || 'iberian', p.tier));
       return iconCache.get(key);
+    };
+    const symFor = p => {
+      const col = zone(p.zone)?.color || '#e8dcc0';
+      const key = `${col}|${p.tier}`;
+      if (!symCache.has(key)) symCache.set(key, makePortSymbol(p.tier, col));
+      return symCache.get(key);
     };
     for (const p of PORTS) {
       const c = new Container(); c.position.set(projX(p.lon) * WS, projY(p.lat) * WS);
@@ -70,13 +89,14 @@ export class WorldMap {
       const ring = new Graphics(); c.addChild(ring);
       const tierS = p.tier >= 3 ? 1.15 : p.tier === 2 ? 0.92 : 0.72;
       const spr = new Sprite(iconFor(p)); spr.anchor.set(0.5, 0.78); spr.scale.set(tierS); c.addChild(spr);
+      const icons = { detail: iconFor(p), symbol: symFor(p) };
       const yardG = new Graphics(); c.addChild(yardG);
       const label = new Text({ text: p.name, style: { fontFamily: FONT, fontSize: 11, fill: '#e8f0f8', stroke: { color: '#06101a', width: 3 } } });
       label.anchor.set(0.5, 0); label.position.set(0, 9 * tierS); c.addChild(label);
       c.on('pointertap', () => { if (this.dragDist > 6) return; this.onPortTap(p.id); });
       c.on('pointerover', () => { spr.tint = 0xffffaa; label.style.fill = '#f2c14e'; hooks.hoverPort(p.id); });
       c.on('pointerout', () => { spr.tint = 0xffffff; label.style.fill = S.mem[p.id] ? '#e8f0f8' : '#9fb2c6'; hooks.hoverPort(null); });
-      this.portLayer.addChild(c); this.ports[p.id] = { c, ring, spr, label, yardG, tierS, p };
+      this.portLayer.addChild(c); this.ports[p.id] = { c, ring, spr, label, yardG, tierS, p, icons, lod: 'detail' };
     }
 
     // NPC 船队
@@ -118,7 +138,7 @@ export class WorldMap {
 
   /* ----- 缩放 ----- */
   zoomAt(sx, sy, factor) {
-    const z0 = this.zoom, z1 = clamp(z0 * factor, ZOOM_MIN, ZOOM_MAX);
+    const z0 = this.zoom, z1 = snapZoom(clamp(z0 * factor, ZOOM_MIN, ZOOM_MAX));
     if (z1 === z0) return;
     const wx = (sx - this.world.x) / z0, wy = (sy - this.world.y) / z0;
     this.zoom = z1; this.world.scale.set(z1);
@@ -139,31 +159,77 @@ export class WorldMap {
   }
   /** 平滑推到某个缩放级别；follow=true 时镜头同时跟住船队 */
   glideZoom(z, follow = true) {
-    this.zoomTarget = clamp(z, ZOOM_MIN, ZOOM_MAX);
+    this.zoomTarget = snapZoom(clamp(z, ZOOM_MIN, ZOOM_MAX));
     if (follow) this.follow = true;
   }
   fitWorld() {
     const vw = this.app.screen.width, vh = this.app.screen.height;
-    this.zoom = clamp(Math.min(vw / (MAP_W * WS), vh / (MAP_H * WS)), ZOOM_MIN * 0.5, ZOOM_MAX);
+    this.zoom = snapZoom(clamp(Math.min(vw / (MAP_W * WS), vh / (MAP_H * WS)), ZOOM_MIN * 0.5, ZOOM_MAX));
+    this.zoomTarget = null;
     this.world.scale.set(this.zoom); this.follow = false;
     this.world.position.set((vw - MAP_W * WS * this.zoom) / 2, (vh - MAP_H * WS * this.zoom) / 2);
     this.clampCamera(); this.applyZoomScaling();
   }
   /** 图标与文字保持接近固定的屏幕尺寸，并按缩放级别隐藏次要标签 */
   applyZoomScaling() {
+    // 拉远时港口换成简洁的地图符号：几十个详细小码头挤在一起会糊成一片
+    const detail = this.zoom >= LOD_DETAIL;
     // 港口是地图符号：只做「部分反向缩放」，拉近时跟着世界一起变大，拉远时也不至于消失
     const k = clamp(Math.pow(1 / this.zoom, 0.6), 0.45, 2.2);
     for (const id in this.ports) {
-      const o = this.ports[id]; o.c.scale.set(k);
-      const minTier = this.zoom < 0.42 ? 3 : this.zoom < 0.62 ? 2 : 1;
-      o.label.visible = o.p.tier >= minTier || o.p.id === S.pos || o.p.id === S.dest;
-      o.label.scale.set(clamp(1 / (this.zoom * k), 0.45, 1.6));      // 文字仍保持可读
+      const o = this.ports[id];
+      const want = detail ? 'detail' : 'symbol';
+      if (o.lod !== want) { o.lod = want; o.spr.texture = o.icons[want]; o.spr.anchor.set(0.5, detail ? 0.78 : 0.62); }
+      // 符号模式保持大致固定的屏幕尺寸（约 14px），全球视角下才点得到、也不会糊成一片
+      o.c.scale.set(detail ? k : clamp(0.85 / this.zoom, 0.8, 4.2));
+      o.label.scale.set(clamp(1 / (this.zoom * o.c.scale.x), 0.45, 1.6));
+      o.label.y = detail ? 9 * this.tierSOf(o) : 7;
     }
-    for (const t of this.zoneLabels) { t.scale.set(clamp(1 / this.zoom, 0.5, 2.4)); t.alpha = this.zoom < 1.3 ? 0.55 : 0.18; }
+    for (const t of this.zoneLabels) { t.scale.set(clamp(0.9 / this.zoom, 0.4, 4.2)); t.alpha = this.zoom < 1.3 ? 0.42 : 0.14; }
     const zv = document.getElementById('zoomv'); if (zv) zv.textContent = `${this.zoom.toFixed(1)}×`;
     // 船是世界里的实体：只按世界比例显示，拉远就该变小
     this.ship.scale.set(SHIP_W * (this.flip ? -1 : 1), SHIP_W);
+    this.ship.visible = this.zoom >= LOD_SHIPS * 0.6;
     if (this.npc) this.npc.setScale(1);
+    this.layoutLabels();
+  }
+  tierSOf(o) { return o.tierS; }
+  /**
+   * 港口名避让：按优先级（当前港 / 目的地 / 任务港 / 规模）依次占位，
+   * 与已放下的标签在屏幕上重叠的就不显示。全球视角下的名字堆叠由此消失。
+   */
+  layoutLabels() {
+    const z = this.zoom, vw = this.app.screen.width, vh = this.app.screen.height;
+    const quest = hooks.questPorts ? hooks.questPorts() : new Set();
+    const placed = [];
+    // 海域名先占位（它们是最粗的分区信息），港口名再往空隙里塞
+    for (const t of this.zoneLabels) {
+      const sx = t.x * z + this.world.x, sy = t.y * z + this.world.y;
+      const w = t.width * z + 8, h = t.height * z + 4;
+      const x0 = sx - w / 2, y0 = sy - h / 2;
+      let hit = false;
+      for (const r of placed) { if (x0 < r.x1 && x0 + w > r.x0 && y0 < r.y1 && y0 + h > r.y0) { hit = true; break; } }
+      t.visible = !hit && sx > -w && sy > -h && sx < vw + w && sy < vh + h;
+      if (t.visible) placed.push({ x0, y0, x1: x0 + w, y1: y0 + h });
+    }
+    const list = [];
+    for (const id in this.ports) {
+      const o = this.ports[id], p = o.p;
+      const sx = projX(p.lon) * WS * z + this.world.x, sy = projY(p.lat) * WS * z + this.world.y;
+      if (sx < -60 || sy < -40 || sx > vw + 60 || sy > vh + 40) { o.label.visible = false; continue; }
+      const pri = p.id === S.pos ? 0 : p.id === S.dest ? 1 : quest.has && quest.has(p.id) ? 2 : 5 - p.tier;
+      list.push({ o, sx, sy, pri });
+    }
+    list.sort((a, b) => a.pri - b.pri);
+    for (const it of list) {
+      const cs = it.o.c.scale.x * z;
+      const w = it.o.label.width * cs + 5, h = it.o.label.height * cs + 3;
+      const x0 = it.sx - w / 2, y0 = it.sy + it.o.label.y * cs;
+      let hit = false;
+      for (const r of placed) { if (x0 < r.x1 && x0 + w > r.x0 && y0 < r.y1 && y0 + h > r.y0) { hit = true; break; } }
+      it.o.label.visible = !hit;
+      if (!hit) placed.push({ x0, y0, x1: x0 + w, y1: y0 + h });
+    }
   }
 
   /* ----- 场景模式 ----- */
@@ -183,9 +249,12 @@ export class WorldMap {
     const qp = hooks.questPorts();
     for (const p of PORTS) {
       const o = this.ports[p.id]; const leader = zoneLeader(p.zone); const sh = S.share[p.zone][leader];
-      const R = 13 * o.tierS;
-      o.ring.clear();
-      o.ring.circle(0, -3, R).stroke({ width: 2.5, color: sh >= 50 ? FACTION_COLOR[leader] : zone(p.zone).color, alpha: sh >= 50 ? 0.95 : 0.3 });
+      const lean = this.zoom >= LOD_DETAIL;
+      const R = lean ? 13 * o.tierS : 8;
+      o.ring.clear(); o.yardG.visible = lean;
+      // 拉远时只给「你主导的」和当前 / 目的港画环，否则四十个圈会盖过地图本身
+      if (lean || sh >= 50 || p.id === S.pos || p.id === S.dest)
+        o.ring.circle(0, -3, R).stroke({ width: lean ? 2.5 : 1.5, color: sh >= 50 ? FACTION_COLOR[leader] : zone(p.zone).color, alpha: sh >= 50 ? 0.95 : (lean ? 0.3 : 0.22) });
       if (p.id === S.pos && !S.dest) o.ring.circle(0, -3, R + 4).stroke({ width: 2, color: 0xf2c14e, alpha: 0.95 });
       if (p.id === S.dest) o.ring.circle(0, -3, R + 4).stroke({ width: 2, color: 0x5ad48a, alpha: 0.95 });
       // 造船厂等级：港口上方 1–3 个金色小方块
@@ -196,9 +265,11 @@ export class WorldMap {
         o.yardG.rect(-total / 2 + i * (w + gap), -R - 8, w, 4).fill({ color: known ? 0xf2c14e : 0x6a7a8a, alpha: known ? 1 : 0.5 });
       }
       const star = qp.has(p.id); o.label.text = star ? `★ ${p.name}` : p.name;
+      o.label.style.fontSize = lean ? 11 : 10;
       o.label.style.fill = star ? '#f2c14e' : known ? '#e8f0f8' : '#9fb2c6';
       o.spr.alpha = known ? 1 : 0.72;
     }
+    this.layoutLabels();
   }
 
   /* ----- 航行（沿寻路航线） ----- */
@@ -250,7 +321,7 @@ export class WorldMap {
     }
     if (this.dayTick) { this.dayTick = false; hooks.renderTop(); }
     this.wakeT += dt; if (this.wakeT > 0.12) { this.wakeT = 0; this.spawnWake(); }
-    this.drawRoute();
+    this.routeT = (this.routeT || 0) + dt; if (this.routeT > 0.12) { this.routeT = 0; this.drawRoute(); }
     if (!v.eventFired && v.traveled >= v.total * 0.5) {
       v.eventFired = true;
       hooks.rollEvent(port(S.dest), extra => { if (extra > 0) { passDays(extra); log(`船队被迫绕行，多耗了 ${extra} 天。`); } hooks.render(); });
@@ -299,6 +370,12 @@ export class WorldMap {
   /* ----- 每帧 ----- */
   tick(t) {
     const dt = Math.min(0.05, t.deltaMS / 1000);
+    this.slowT = (this.slowT || 0) + t.deltaMS;
+    const slow = this.slowT > 130;                 // 约 8 次/秒的低频活
+    if (slow) this.slowT = 0;
+    // 帧率读数（滑动平均），方便直接看当前机器上的真实帧率
+    this.fps = this.fps ? this.fps * 0.92 + (1000 / Math.max(1, t.deltaMS)) * 0.08 : 1000 / Math.max(1, t.deltaMS);
+    if (slow) { const fe = document.getElementById('fpsv'); if (fe) { const v = Math.round(this.fps); fe.textContent = `${v}fps`; fe.style.color = v >= 50 ? '' : v >= 30 ? '#f2c14e' : '#e8646c'; } }
     this.frameT += t.deltaMS;
     if (this.frameT > 350) { this.frameT = 0; this.frame = (this.frame + 1) % this.waterFrames.length; this.water.texture = this.waterFrames[this.frame]; this.water2.texture = this.waterFrames[(this.frame + 3) % this.waterFrames.length]; }
     const ws = S && S.weather?.type === 'storm' ? 3 : S && S.weather?.type === 'rain' ? 1.6 : 1;
@@ -307,7 +384,8 @@ export class WorldMap {
     for (const w of this.wakes) { w.life -= dt; w.g.alpha = Math.max(0, w.life / 1.4) * 0.6; w.g.scale.set(1 + (1.4 - w.life) * 0.5); }
     this.wakes = this.wakes.filter(w => { if (w.life <= 0) { w.g.destroy(); return false; } return true; });
     if (!S) return;
-    const modalOpen = !!document.querySelector('.modal-bg');
+    if (slow || this._modal === undefined) this._modal = !!document.querySelector('.modal-bg');
+    const modalOpen = this._modal;
     const wt = this.mode === 'battle' ? 'clear' : (S.weather?.type || 'clear');
     this.weather.tick(dt, wt);
     if (this.mode === 'battle') { this.battle.tick(dt); return; }
@@ -321,8 +399,7 @@ export class WorldMap {
     if (!modalOpen) { if (S.dest) this.move(dt); this.npc.tick(dt, modalOpen); }
     this.placeShip();
     if (this.follow) this.followCamera();
-    this.updateNight();
-    this.updateBanner();
+    if (slow) { this.layoutLabels(); this.updateNight(); this.updateBanner(); }
   }
   placeShip() {
     this.ship.position.set(S.ship.x * WS, S.ship.y * WS);

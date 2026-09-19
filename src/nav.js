@@ -66,6 +66,36 @@ export function buildMask() {
   }
   return mask;
 }
+/**
+ * 给「画面」用的高分辨率陆地掩膜：1 逻辑单位 = 1 像素（导航网格是 4 单位一格）。
+ * 海岸线的台阶因此细 4 倍。寻路仍然用粗网格，互不影响。
+ */
+let hiMask = null;
+export function buildHiMask() {
+  if (hiMask) return hiMask;
+  const cv = document.createElement('canvas'); cv.width = MAP_W; cv.height = MAP_H;
+  const x = cv.getContext('2d', { willReadFrequently: true });
+  x.fillStyle = '#fff';
+  for (const poly of landPolysXY()) {
+    x.beginPath();
+    poly.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py)));
+    x.closePath(); x.fill();
+  }
+  const data = x.getImageData(0, 0, MAP_W, MAP_H).data;
+  hiMask = new Uint8Array(MAP_W * MAP_H);
+  for (let i = 0; i < MAP_W * MAP_H; i++) hiMask[i] = data[i * 4 + 3] > 110 ? 1 : 0;
+  // 与寻路一致：把关键海峡也在高分辨率上打通，免得画面里陆地连着而航线却穿过去
+  for (const [lon, lat, rDeg] of STRAITS) {
+    const cx = projX(lon), cy = projY(lat), rr = Math.max(1.5, rDeg * 12);
+    for (let r = Math.floor(cy - rr); r <= Math.ceil(cy + rr); r++)
+      for (let c = Math.floor(cx - rr); c <= Math.ceil(cx + rr); c++) {
+        if (c < 0 || r < 0 || c >= MAP_W || r >= MAP_H) continue;
+        if ((c - cx) ** 2 + (r - cy) ** 2 <= rr * rr) hiMask[r * MAP_W + c] = 0;
+      }
+  }
+  return hiMask;
+}
+
 export function isLandXY(x, y) {
   buildMask();
   const c = Math.floor(x / NAV), r = Math.floor(y / NAV);

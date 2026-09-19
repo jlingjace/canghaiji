@@ -194,6 +194,26 @@ const PORT_STYLE = {
   colonial:      { wall: '#e6eef7', roof: '#a85a4a' }, brazil:        { wall: '#f0dcc0', roof: '#b06a3a' },
 };
 /**
+ * 低缩放下用的港口「地图符号」：一个带描边的菱形，规模决定大小，大港加一面小旗。
+ * 全球视角下几十个详细的小码头会糊成一片，换成符号就清爽了。
+ */
+export function makePortSymbol(tier = 2, color = '#e8dcc0') {
+  const R = tier >= 3 ? 5 : tier === 2 ? 4 : 3;
+  const SZ = R * 2 + 6, cx = Math.floor(SZ / 2), cy = tier >= 3 ? R + 4 : R + 2;
+  const c = document.createElement('canvas'); c.width = SZ; c.height = SZ;
+  const x = c.getContext('2d'); x.imageSmoothingEnabled = false;
+  const px = (a2, b2, w, h, col) => { x.fillStyle = col; x.fillRect(Math.round(a2), Math.round(b2), Math.round(w), Math.round(h)); };
+  if (tier >= 3) { px(cx, 0, 1, 5, '#3a4450'); px(cx + 1, 0, 3, 2, color); }   // 旗杆
+  for (let j = -R; j <= R; j++) {                                              // 菱形
+    const w = (R - Math.abs(j)) * 2 + 1;
+    px(cx - (w + 2) / 2, cy + j, w + 2, 1, '#141c26');                         // 描边
+    if (Math.abs(j) < R) px(cx - w / 2, cy + j, w, 1, A.shade(color, j < 0 ? 0.22 : -0.26));
+  }
+  px(cx - 1, cy - 1, 2, 2, A.shade(color, 0.40));                              // 高光
+  return canvasTexture(c);
+}
+
+/**
  * 港口图标。tier 决定建筑数量与是否有塔楼，style 决定墙色与屋顶色，
  * 所以在海图上一眼能看出这是个什么样的港。
  */
@@ -314,50 +334,65 @@ export function makeWorldLandCanvas() {
   }
 
   /* ---- 高频细节查找表（逐像素调用噪声太慢）---- */
-  const LUT = 64, nz = new Float32Array(LUT * LUT);
-  for (let y = 0; y < LUT; y++) for (let x = 0; x < LUT; x++) nz[y * LUT + x] = N.fbm(x * 0.22, y * 0.22, 3) - 0.5;
+  const LUT = 128, nz = new Float32Array(LUT * LUT);
+  for (let y = 0; y < LUT; y++) for (let x = 0; x < LUT; x++) nz[y * LUT + x] = N.fbm(x * 0.17, y * 0.17, 4) - 0.5;
 
   const put = (x, y, r8, g8, b8, a8) => {
     const i = (y * MAP_W + x) * 4;
     d[i] = r8; d[i + 1] = g8; d[i + 2] = b8; d[i + 3] = a8;
   };
-  const at = (c, r) => (c < 0 || r < 0 || c >= NC || r >= NR) ? 0 : mask[r * NC + c];
-  const litAt = (c, r) => (c < 0 || r < 0 || c >= NC || r >= NR || !mask[r * NC + c]) ? 0 : lit[r * NC + c];
 
-  for (let r = 0; r < NR; r++) for (let c = 0; c < NC; c++) {
-    const i = r * NC + c, ox = c * NAV, oy = r * NAV;
-    if (!mask[i]) {
-      /* 海：只画大陆架，深海留给下面会动的水面平铺层 */
-      const dl = distToLand[i];
-      if (dl === 255 || dl > 15) continue;
-      const t = 1 - (dl - 1) / 15;                       // 1=贴岸 0=架缘
-      const sc = A.mix(SHELF, SHOAL, Math.pow(t, 1.5));
-      const alpha = Math.round(235 * Math.pow(t, 1.35));
-      for (let y = 0; y < NAV; y++) for (let x = 0; x < NAV; x++) {
-        const n = nz[((oy + y) & 63) * LUT + ((ox + x) & 63)];
-        const a = Math.max(0, Math.min(255, alpha + n * 60));
-        put(ox + x, oy + y, sc[0] + n * 26, sc[1] + n * 26, sc[2] + n * 20, a);
+  /* ---- 逐像素上色 ----
+     地形起伏、气候、浅滩这些「场」是连续的，按粗网格算再插值就够；
+     但陆海边界必须用高分辨率掩膜逐像素判断，否则海岸线是 4 像素一级的台阶。 */
+  const hi = nav.buildHiMask();
+  const isLand = (x, y) => (x < 0 || y < 0 || x >= MAP_W || y >= MAP_H) ? 0 : hi[y * MAP_W + x];
+  // 双线性取样粗网格上的场
+  const sampleCell = (arr, gx, gy) => {
+    const c0 = Math.min(NC - 1, Math.max(0, Math.floor(gx))), r0 = Math.min(NR - 1, Math.max(0, Math.floor(gy)));
+    const c1 = Math.min(NC - 1, c0 + 1), r1 = Math.min(NR - 1, r0 + 1);
+    const fx = Math.min(1, Math.max(0, gx - c0)), fy = Math.min(1, Math.max(0, gy - r0));
+    return (arr[r0 * NC + c0] * (1 - fx) + arr[r0 * NC + c1] * fx) * (1 - fy)
+         + (arr[r1 * NC + c0] * (1 - fx) + arr[r1 * NC + c1] * fx) * fy;
+  };
+  // 邻近取样（颜色不插值，避免气候带糊成一片）
+  const nearCell = (arr, gx, gy) => arr[Math.min(NR - 1, Math.max(0, Math.round(gy - 0.5))) * NC + Math.min(NC - 1, Math.max(0, Math.round(gx - 0.5)))];
+
+  for (let y = 0; y < MAP_H; y++) {
+    const gy = (y + 0.5) / NAV;
+    for (let x = 0; x < MAP_W; x++) {
+      const gx = (x + 0.5) / NAV;
+      const n = nz[((y * 1.37 | 0) & (LUT - 1)) * LUT + ((x * 1.11 | 0) & (LUT - 1))];
+      if (!isLand(x, y)) {
+        /* 海：只画大陆架，深海留给下面会动的水面平铺层 */
+        const dl = sampleCell(distToLand, gx, gy);
+        if (dl > 15 || dl <= 0) continue;
+        const t = 1 - (dl - 1) / 15;
+        const sc = A.mix(SHELF, SHOAL, Math.pow(Math.max(0, t), 1.5));
+        let alpha = 235 * Math.pow(Math.max(0, t), 1.35) + n * 60;
+        // 紧贴岸边的一两像素加一道亮浅滩，海岸线就有了「边」
+        if (isLand(x - 1, y) || isLand(x + 1, y) || isLand(x, y - 1) || isLand(x, y + 1)) { alpha = 252; }
+        put(x, y, sc[0] + n * 26, sc[1] + n * 26, sc[2] + n * 20, Math.max(0, Math.min(255, alpha)));
+        continue;
       }
-      continue;
-    }
-    /* 陆：格内按四邻受光双线性插值，得到连续的山体明暗 */
-    const l00 = lit[i], l10 = litAt(c + 1, r), l01 = litAt(c, r + 1), l11 = litAt(c + 1, r + 1);
-    const cr = colR[i], cg = colG[i], cb = colB[i];
-    const nS = !at(c, r - 1), sS = !at(c, r + 1), wS = !at(c - 1, r), eS = !at(c + 1, r);
-    for (let y = 0; y < NAV; y++) {
-      const fy = (y + 0.5) / NAV;
-      for (let x = 0; x < NAV; x++) {
-        const fx = (x + 0.5) / NAV;
-        const L = (l00 * (1 - fx) + l10 * fx) * (1 - fy) + (l01 * (1 - fx) + l11 * fx) * fy;
-        const n = nz[((oy + y) & 63) * LUT + ((ox + x) & 63)];
-        let k = L * 0.30 + n * 0.16;                     // 明暗 + 颗粒
-        let R = cr, G = cg, B = cb;
-        // 临海的最外一圈压一道湿沙深色，海岸线才有形
-        if ((nS && y === 0) || (sS && y === NAV - 1) || (wS && x === 0) || (eS && x === NAV - 1)) k -= 0.22;
-        const o = k >= 0 ? [R + (255 - R) * k * 0.85, G + (246 - G) * k * 0.85, B + (224 - B) * k * 0.85]
-                         : [R + (18 - R) * -k, G + (26 - G) * -k, B + (46 - B) * -k];
-        put(ox + x, oy + y, o[0], o[1], o[2], 255);
+      /* 陆 */
+      const L = sampleCell(lit, gx, gy);
+      const ci = Math.min(NR - 1, Math.max(0, Math.round(gy - 0.5))) * NC + Math.min(NC - 1, Math.max(0, Math.round(gx - 0.5)));
+      let R = colR[ci], G = colG[ci], B = colB[ci];
+      if (!R && !G && !B) { R = 74; G = 122; B = 68; }          // 粗网格判为海、但高分辨率判为陆的边角
+      let k = L * 0.30 + n * 0.14;
+      // 沙滩：按高分辨率掩膜量出离海几像素
+      let coast = 0;
+      for (let d = 1; d <= 3 && !coast; d++) {
+        if (!isLand(x - d, y) || !isLand(x + d, y) || !isLand(x, y - d) || !isLand(x, y + d)
+          || !isLand(x - d, y - d) || !isLand(x + d, y + d) || !isLand(x - d, y + d) || !isLand(x + d, y - d)) coast = d;
       }
+      if (coast === 1) { R = R * 0.18 + SAND[0] * 0.82; G = G * 0.18 + SAND[1] * 0.82; B = B * 0.18 + SAND[2] * 0.82; k -= 0.06; }
+      else if (coast === 2) { R = R * 0.45 + SAND_D[0] * 0.55; G = G * 0.45 + SAND_D[1] * 0.55; B = B * 0.45 + SAND_D[2] * 0.55; k -= 0.12; }
+      else if (coast === 3) { R = R * 0.78 + SAND_D[0] * 0.22; G = G * 0.78 + SAND_D[1] * 0.22; B = B * 0.78 + SAND_D[2] * 0.22; k -= 0.16; }
+      const o = k >= 0 ? [R + (255 - R) * k * 0.85, G + (246 - G) * k * 0.85, B + (224 - B) * k * 0.85]
+                       : [R + (18 - R) * -k, G + (26 - G) * -k, B + (46 - B) * -k];
+      put(x, y, o[0], o[1], o[2], 255);
     }
   }
   ctx.putImageData(img, 0, 0);
